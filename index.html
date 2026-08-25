@@ -2112,7 +2112,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
         const idbKeyval = {
             dbName: 'MediaPlayerDB',
             storeName: 'keyval',
-            
+
             async openDB() {
                 return new Promise((resolve, reject) => {
                     const request = indexedDB.open(this.dbName, 1);
@@ -2126,7 +2126,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     };
                 });
             },
-            
+
             async get(key) {
                 const db = await this.openDB();
                 return new Promise((resolve, reject) => {
@@ -2137,7 +2137,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     request.onsuccess = () => resolve(request.result);
                 });
             },
-            
+
             async set(key, value) {
                 const db = await this.openDB();
                 return new Promise((resolve, reject) => {
@@ -4176,7 +4176,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             } else {
                 const isAudio = file.type.startsWith('audio');
                 const isVideo = file.type.startsWith('video');
-                
+
                 // 如果是视频文件且开启了音频图谱模式，则创建audio元素而不是video元素
                 if (isVideo && trackAudioSpectrum) {
                     mediaElement = document.createElement('audio');
@@ -4185,11 +4185,11 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     mediaElement.autoplay = true;
                     mediaElement.playbackRate = parseFloat(currentSpeed);
                     mediaElement.muted = isMuted;
-                    
+
                     // 隐藏audio元素，只显示可视化效果
                     mediaElement.style.display = 'none';
                     container.appendChild(mediaElement);
-                    
+
                     // 为视频文件创建音频可视化效果
                     createVisualizer(mediaElement, container);
                 } else {
@@ -4201,7 +4201,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     mediaElement.playbackRate = parseFloat(currentSpeed);
                     mediaElement.muted = isMuted;
                     container.appendChild(mediaElement);
-                    
+
                     // 只有音频文件才显示可视化效果
                     if (isAudio) {
                         createVisualizer(mediaElement, container);
@@ -4221,7 +4221,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 mediaElement.addEventListener('loadedmetadata', updateClipDockUI);
                 mediaElement.addEventListener('durationchange', updateClipDockUI);
             }
-            
+
             // 重新添加控制层，确保在最上层
             container.insertAdjacentHTML('beforeend', controlOverlay);
             // 重新初始化控制层事件
@@ -4283,7 +4283,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 saved.splice(index, 1);
                 await idbKeyval.set('mediaDirs', saved);
             }
-            
+
             // 删除IndexedDB中该目录的句柄数据
             try {
                 const db = await idbKeyval.openDB();
@@ -4297,7 +4297,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             } catch (error) {
                 console.error('删除目录数据失败:', error);
             }
-            
+
             // 如果删除的是当前使用的目录，清空播放列表
             if (dirHandle && dirHandle.name === name) {
                 dirHandle = null;
@@ -4311,7 +4311,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     document.getElementById('currentMedia').textContent = '请选择媒体';
                 }
             }
-            
+
             // 如果删除的是lastUsedDir，清空它
             const lastUsed = await idbKeyval.get('lastUsedDir');
             if (lastUsed === name) {
@@ -4328,7 +4328,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     console.error('删除lastUsedDir失败:', error);
                 }
             }
-            
+
             // 重新渲染目录列表
             renderDirList(saved);
         }
@@ -4343,7 +4343,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             for (const name of names) {
                 const li = document.createElement('li');
                 li.className = 'dir-item';
-                
+
                 // 目录名称部分
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'dir-item-name';
@@ -4358,7 +4358,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                         renderPlaylist();
                     }
                 };
-                
+
                 // 删除按钮
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'dir-item-delete';
@@ -4368,7 +4368,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     e.stopPropagation(); // 阻止事件冒泡
                     await removeFromSavedDirs(name);
                 };
-                
+
                 li.appendChild(nameSpan);
                 li.appendChild(deleteBtn);
                 container.appendChild(li);
@@ -4883,23 +4883,23 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
         };
 
         let isDragging = false;
-        
+
         // 添加控制层事件处理
         function initControlOverlay() {
             initControlOverlayEvents();
-            
+
             // 实时更新进度条显示
             function updateProgressDisplay() {
                 const progressFill = document.getElementById('progressFill');
                 const progressFillFine = document.getElementById('progressFillFine');
-                
+
                 if (mediaElement && (mediaElement.tagName === 'VIDEO' || mediaElement.tagName === 'AUDIO') && mediaElement.duration) {
                     // 更新整体进度条
                     if (progressFill) {
                         const progress = mediaElement.currentTime / mediaElement.duration;
                         progressFill.style.height = (progress * 100) + '%';
                     }
-                    
+
                     // 更新快进快退指示器（暂时隐藏，因为现在是点击控制）
                     if (progressFillFine) {
                         progressFillFine.style.height = '0%';
@@ -4909,7 +4909,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             }
             updateProgressDisplay();
         }
-        
+
         function initControlOverlayEvents() {
             const controlLeft = document.getElementById('controlLeft');
             const controlRight = document.getElementById('controlRight');
@@ -4917,21 +4917,21 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             const controlCenterRight = document.getElementById('controlCenterRight');
             const progressFill = document.getElementById('progressFill');
             const progressFillFine = document.getElementById('progressFillFine');
-            
+
             if (!controlLeft || !controlRight || !controlCenterLeft || !controlCenterRight) return;
-            
+
             // 左侧点击 - 上一个
             controlLeft.onclick = () => {
                 getPrevIndex();
                 playMedia(currentIndex);
             };
-            
+
             // 右侧点击 - 下一个
             controlRight.onclick = () => {
                 getNextIndex();
                 playMedia(currentIndex);
             };
-            
+
             // 右侧右键 - 暂停/播放
             controlRight.oncontextmenu = (e) => {
                 e.preventDefault();
@@ -4946,35 +4946,35 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     updateControls();
                 }
             };
-            
+
             // 左侧中间区域 - 整体进度控制
             function updateGlobalProgress(e) {
                 if (!mediaElement || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
                 if (!mediaElement.duration) return;
-                
+
                 const rect = controlCenterLeft.getBoundingClientRect();
                 const y = e.clientY - rect.top;
                 const progress = 1 - (y / rect.height); // 从下到上
                 const clampedProgress = Math.max(0, Math.min(1, progress));
-                
+
                 mediaElement.currentTime = clampedProgress * mediaElement.duration;
             }
-            
+
             // 右侧中间区域 - 快进快退控制
             function updateFastSeek(e) {
                 if (!mediaElement || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
                 if (!mediaElement.duration) return;
-                
+
                 const rect = controlCenterRight.getBoundingClientRect();
                 const centerY = rect.top + rect.height / 2; // 中间位置
                 const clickY = e.clientY;
                 const distanceFromCenter = centerY - clickY; // 从中间到点击位置的距离
                 const maxDistance = rect.height / 2; // 中间位置到顶部/底部的距离
-                
+
                 // 计算快进/快退的时间（0-2秒）
                 const seekTime = Math.abs(distanceFromCenter / maxDistance) * 2; // 最大2秒
                 const clampedSeekTime = Math.min(2, seekTime);
-                
+
                 let newTime;
                 if (clickY < centerY) {
                     // 上半部分 - 快进
@@ -4983,13 +4983,13 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     // 下半部分 - 快退
                     newTime = mediaElement.currentTime - clampedSeekTime;
                 }
-                
+
                 // 确保时间在有效范围内
                 mediaElement.currentTime = Math.max(0, Math.min(mediaElement.duration, newTime));
             }
-            
+
             let dragMode = null; // 'global' 或 'fine'
-            
+
             controlCenterLeft.onmousedown = (e) => {
                 e.preventDefault();
                 if (e.button === 0) {
@@ -4998,37 +4998,37 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                     updateGlobalProgress(e);
                 }
             };
-            
+
             controlCenterRight.onmousedown = (e) => {
                 e.preventDefault();
                 if (e.button === 0) {
                     updateFastSeek(e);
                 }
             };
-            
+
             document.onmousemove = (e) => {
                 if (isDragging && dragMode === 'global') {
                     updateGlobalProgress(e);
                 }
             };
-            
+
             document.onmouseup = () => {
                 isDragging = false;
                 dragMode = null;
             };
-            
+
             // 右键截图功能
             controlCenterLeft.oncontextmenu = (e) => {
                 e.preventDefault();
                 takeScreenshot();
             };
-            
+
             controlCenterRight.oncontextmenu = (e) => {
                 e.preventDefault();
                 takeScreenshot();
             };
         }
-        
+
         init();
         initTheme();
         initToolbarMenu();
