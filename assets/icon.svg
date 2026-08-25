@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">FrameDeck</title>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="48" x2="432" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172231"/>
+      <stop offset="1" stop-color="#090d12"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="148" y1="120" x2="376" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4b8fff"/>
+      <stop offset="1" stop-color="#2168df"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="94" y="94" width="324" height="324" rx="86" fill="#101923" stroke="#2b3949" stroke-width="12"/>
+  <rect x="128" y="128" width="256" height="256" rx="60" fill="none" stroke="url(#accent)" stroke-width="24"/>
+  <path d="M220 190v132l112-66-112-66Z" fill="url(#accent)" stroke="#a9ccff" stroke-width="8" stroke-linejoin="round"/>
+</svg>
