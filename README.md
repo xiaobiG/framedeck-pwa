@@ -33,6 +33,7 @@ GitHub Pages 提供 HTTPS，满足 Service Worker、PWA 安装和 File System Ac
 | 快捷键 | 操作 |
 | --- | --- |
 | `F3` | 媒体专注模式 |
+| `F` | 进入或退出浏览器全屏 |
 | `F4` | 复制到目标目录 |
 | `Space` | 复制当前文件并预览下一项 |
 | `[` / `]` | 设置 A/B 剪辑点 |

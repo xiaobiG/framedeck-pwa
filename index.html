@@ -3,7 +3,7 @@ title: FrameDeck
 date: 2026-08-26
 type: html-tool
 status: active
-summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文件整理、A/B 剪辑、G 键快速保存 MP4、离线运行与剪辑诊断。
+summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、浮动剪辑面板、全屏、截图、文件整理、A/B 剪辑、G 键快速保存 MP4、离线运行与剪辑诊断。
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -1371,7 +1371,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
         }
 
         .player-container {
-            padding: 10px 10px 206px;
+            padding: 10px;
             border-radius: 12px;
             background: var(--fd-surface);
             border: 1px solid var(--fd-border);
@@ -1514,16 +1514,16 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
         }
 
         .clip-dock {
-            --clip-dock-width: calc(100vw - 316px);
+            --clip-dock-width: min(920px, calc(100vw - 316px));
             left: calc(264px + ((100vw - 264px) / 2));
-            bottom: 12px;
+            bottom: 18px;
             align-items: stretch;
             gap: 0;
         }
 
         .app.sidebar-collapsed ~ .clip-dock,
         body:has(.app.sidebar-collapsed) .clip-dock {
-            --clip-dock-width: calc(100vw - 24px);
+            --clip-dock-width: min(920px, calc(100vw - 32px));
             left: 50%;
         }
 
@@ -1533,7 +1533,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             width: var(--clip-dock-width);
             background: var(--fd-surface-raised);
             border: 1px solid var(--fd-border);
-            box-shadow: none;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42), 0 3px 12px rgba(0, 0, 0, 0.28);
             backdrop-filter: none;
             -webkit-backdrop-filter: none;
         }
@@ -1621,6 +1621,65 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             border-radius: 9px;
         }
 
+        body.is-fullscreen {
+            background: #000;
+        }
+
+        body.is-fullscreen .app {
+            height: 100dvh;
+            padding: 0;
+            gap: 0;
+        }
+
+        body.is-fullscreen .sidebar,
+        body.is-fullscreen .mobile-app-bar,
+        body.is-fullscreen .sidebar-backdrop {
+            display: none !important;
+        }
+
+        body.is-fullscreen .player-container {
+            position: fixed;
+            inset: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: #000;
+            box-shadow: none;
+        }
+
+        body.is-fullscreen .media-area {
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        body.is-fullscreen .controls {
+            position: fixed;
+            top: max(12px, env(safe-area-inset-top));
+            left: 50%;
+            z-index: 9500;
+            width: min(980px, calc(100vw - 24px));
+            margin: 0;
+            transform: translateX(-50%);
+            opacity: 0.12;
+            transition: opacity 0.18s ease;
+        }
+
+        body.is-fullscreen .controls:hover,
+        body.is-fullscreen .controls:focus-within {
+            opacity: 1;
+        }
+
+        body.is-fullscreen .clip-dock,
+        body.is-fullscreen:has(.app.sidebar-collapsed) .clip-dock {
+            --clip-dock-width: min(920px, calc(100vw - 32px));
+            top: auto !important;
+            right: auto !important;
+            bottom: max(18px, env(safe-area-inset-bottom)) !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+        }
+
         .clip-diagnostic-actions,
         .clip-task-item {
             background: var(--fd-surface-raised);
@@ -1646,7 +1705,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             }
 
             .clip-dock {
-                --clip-dock-width: calc(100vw - 284px);
+                --clip-dock-width: min(840px, calc(100vw - 284px));
                 left: calc(232px + ((100vw - 232px) / 2));
             }
 
@@ -1762,7 +1821,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 top: calc(56px + env(safe-area-inset-top));
                 left: 0;
                 right: 0;
-                bottom: calc(192px + env(safe-area-inset-bottom));
+                bottom: 0;
                 padding: 7px;
                 border: 0;
                 border-radius: 0;
@@ -1840,15 +1899,15 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
 
             .clip-dock,
             body:has(.app.sidebar-collapsed) .clip-dock {
-                --clip-dock-width: 100vw;
+                --clip-dock-width: calc(100vw - 16px);
                 top: auto !important;
-                left: 0 !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                transform: none !important;
+                left: 50% !important;
+                right: auto !important;
+                bottom: max(8px, env(safe-area-inset-bottom)) !important;
+                transform: translateX(-50%) !important;
                 gap: 0;
-                padding-bottom: env(safe-area-inset-bottom);
-                background: var(--fd-surface-raised);
+                padding-bottom: 0;
+                background: transparent;
             }
 
             .clip-dock-bar {
@@ -1857,7 +1916,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 gap: 6px;
                 min-height: 96px;
                 padding: 5px 8px;
-                border-radius: 0;
+                border-radius: 12px 12px 0 0;
             }
 
             .clip-dock-handle {
@@ -1893,7 +1952,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             .clip-timeline {
                 min-height: 96px;
                 padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-                border-radius: 0;
+                border-radius: 0 0 12px 12px;
             }
 
             .clip-shortcuts {
@@ -1999,6 +2058,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 <div class="control-group" aria-label="显示控制">
                     <span id="sidebarToggleBtnAnchor" class="toolbar-anchor"></span><button id="sidebarToggleBtn" type="button" title="显示或隐藏左侧目录与播放列表">隐藏目录</button>
                     <span id="muteBtnAnchor" class="toolbar-anchor"></span><button id="muteBtn">静音</button>
+                    <span id="fullscreenBtnAnchor" class="toolbar-anchor"></span><button id="fullscreenBtn" type="button" title="进入或退出全屏 (F)" aria-pressed="false">全屏</button>
                 </div>
                 <div class="control-group" aria-label="截图控制">
                     <span id="screenshotBtnAnchor" class="toolbar-anchor"></span><button id="screenshotBtn" title="保存截图并复制当前画面到剪贴板（复制固定为 PNG）">截图</button>
@@ -2099,7 +2159,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 <span id="clipTimelineTotal">--:--</span>
             </div>
             <div class="clip-shortcuts" aria-label="键盘快捷键">
-                <span><kbd>[</kbd> 设起点</span><span><kbd>]</kbd> 设终点</span><span><kbd>L</kbd> A–B 循环</span><span><kbd>T</kbd> 任务</span><span><kbd>F5</kbd> 导出</span><span><kbd>G</kbd> 快速片段</span>
+                <span><kbd>[</kbd> 设起点</span><span><kbd>]</kbd> 设终点</span><span><kbd>L</kbd> A–B 循环</span><span><kbd>T</kbd> 任务</span><span><kbd>F5</kbd> 导出</span><span><kbd>G</kbd> 快速片段</span><span><kbd>F</kbd> 全屏</span>
             </div>
         </div>
     </div>
@@ -3414,6 +3474,60 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
             window.dispatchEvent(new Event('resize'));
         }
 
+        function getFullscreenElement() {
+            return document.fullscreenElement || document.webkitFullscreenElement || null;
+        }
+
+        function syncFullscreenUI() {
+            const active = Boolean(getFullscreenElement());
+            document.body.classList.toggle('is-fullscreen', active);
+            const button = document.getElementById('fullscreenBtn');
+            if (button) {
+                button.textContent = active ? '退出全屏' : '全屏';
+                button.setAttribute('aria-pressed', String(active));
+                button.title = active ? '退出全屏 (F / Esc)' : '进入全屏 (F)';
+            }
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        async function toggleFullscreen() {
+            try {
+                if (getFullscreenElement()) {
+                    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                    if (!exit) throw new Error('当前浏览器不支持退出全屏');
+                    await exit.call(document);
+                    return;
+                }
+                const root = document.documentElement;
+                const request = root.requestFullscreen || root.webkitRequestFullscreen;
+                if (!request) throw new Error('当前浏览器不支持全屏');
+                await request.call(root);
+            } catch (error) {
+                console.warn('切换全屏失败', error);
+                showToast(error.message || '无法切换全屏', { error: true });
+            }
+        }
+
+        function initFullscreen() {
+            const button = document.getElementById('fullscreenBtn');
+            const enabled = Boolean(
+                document.fullscreenEnabled
+                || document.webkitFullscreenEnabled
+                || document.documentElement.requestFullscreen
+                || document.documentElement.webkitRequestFullscreen
+            );
+            if (button) {
+                button.onclick = () => toggleFullscreen();
+                if (!enabled && !document.documentElement.webkitRequestFullscreen) {
+                    button.disabled = true;
+                    button.title = '当前浏览器不支持全屏';
+                }
+            }
+            document.addEventListener('fullscreenchange', syncFullscreenUI);
+            document.addEventListener('webkitfullscreenchange', syncFullscreenUI);
+            syncFullscreenUI();
+        }
+
         function applyTheme(theme) {
             const next = theme === 'dark' ? 'dark' : 'light';
             document.body.dataset.theme = next;
@@ -3571,6 +3685,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 { id: 'modeBtn', anchorId: 'modeBtnAnchor' },
                 { id: 'speedControl', anchorId: 'speedControlAnchor' },
                 { id: 'sidebarToggleBtn', anchorId: 'sidebarToggleBtnAnchor' },
+                { id: 'fullscreenBtn', anchorId: 'fullscreenBtnAnchor' },
                 { id: 'muteBtn', anchorId: 'muteBtnAnchor' },
                 { id: 'screenshotBtn', anchorId: 'screenshotBtnAnchor' },
             ].map((item) => ({
@@ -5036,6 +5151,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
         initClipDock();
         initMobileShell();
         initPwa();
+        initFullscreen();
         document.getElementById('emptyDirPicker').onclick = () => {
             document.getElementById('dirPicker').click();
         };
@@ -5051,6 +5167,14 @@ summary: 专业的本地优先 PWA 媒体工作台，支持播放、截图、文
                 && !event.repeat && !isEditing) {
                 event.preventDefault();
                 enqueueQuickClipExport();
+                return;
+            }
+
+            if (event.code === 'KeyF'
+                && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+                && !event.repeat && !isEditing) {
+                event.preventDefault();
+                toggleFullscreen();
                 return;
             }
 
