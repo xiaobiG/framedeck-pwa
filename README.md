@@ -16,7 +16,7 @@ python3 -m http.server 8877 --bind 127.0.0.1
 http://127.0.0.1:8877/
 ```
 
-首次完整加载后，应用外壳和 FFmpeg WebAssembly 会被缓存，可离线再次打开。媒体文件始终保留在本机，只有用户明确授权的目录可被读取或写入。
+首次完整加载后，应用外壳会缓存；首次使用剪辑功能后，FFmpeg WebAssembly 也会按需缓存，可离线再次打开。媒体文件始终保留在本机，只有用户明确授权的目录可被读取或写入。
 
 ## GitHub Pages
 
@@ -27,6 +27,8 @@ https://xiaobig.github.io/framedeck-pwa/
 ```
 
 GitHub Pages 提供 HTTPS，满足 Service Worker、PWA 安装和 File System Access API 的安全上下文要求。推荐使用最新的 Chromium 内核桌面浏览器；Safari 和 Firefox 对目录读写 API 的支持仍有限。
+
+每次部署前，工作流会执行 `npm test` 和 `npm run check`，校验关键媒体生命周期约束、Service Worker 应用壳清单和发布资源是否完整。
 
 ## 快捷键
 

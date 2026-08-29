@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'framedeck-v20-20260826-2';
+const CACHE_VERSION = 'framedeck-v20-20260829-3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,9 +8,7 @@ const APP_SHELL = [
   './assets/icon-512.png',
   './vendor/ffmpeg/util.js',
   './vendor/ffmpeg/ffmpeg.js',
-  './vendor/ffmpeg/814.ffmpeg.js',
-  './vendor/ffmpeg/ffmpeg-core.js',
-  './vendor/ffmpeg/ffmpeg-core.wasm'
+  './vendor/ffmpeg/814.ffmpeg.js'
 ];
 
 self.addEventListener('install', (event) => {

@@ -1459,7 +1459,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             align-items: center;
             max-width: 520px;
             padding: 28px;
-            color: var(--fd-text);
+            color: #f3f6fa;
             text-align: center;
         }
 
@@ -1495,7 +1495,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         .media-empty-state p {
             margin: 14px 0 24px;
-            color: var(--fd-muted);
+            color: #b9c4d0;
             font-size: 0.86rem;
         }
 
@@ -2094,20 +2094,20 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     <button type="button" id="emptyDirPicker">选择媒体目录</button>
                 </div>
                 <div class="control-overlay" id="controlOverlay">
-                    <div class="control-left" id="controlLeft"></div>
+                    <div class="control-left" id="controlLeft" role="button" tabindex="0" aria-label="上一个媒体"></div>
                     <div class="control-center" id="controlCenter">
-                        <div class="control-center-left" id="controlCenterLeft">
+                        <div class="control-center-left" id="controlCenterLeft" role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                             <div class="progress-indicator">
                                 <div class="progress-fill" id="progressFill"></div>
                             </div>
                         </div>
-                        <div class="control-center-right" id="controlCenterRight">
+                        <div class="control-center-right" id="controlCenterRight" role="button" tabindex="0" aria-label="微调播放位置">
                             <div class="progress-indicator">
                                 <div class="progress-fill" id="progressFillFine"></div>
                             </div>
                         </div>
                     </div>
-                    <div class="control-right" id="controlRight"></div>
+                    <div class="control-right" id="controlRight" role="button" tabindex="0" aria-label="下一个媒体"></div>
                 </div>
             </div>
         </div>
@@ -2172,12 +2172,24 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         const idbKeyval = {
             dbName: 'MediaPlayerDB',
             storeName: 'keyval',
+            dbPromise: null,
 
             async openDB() {
-                return new Promise((resolve, reject) => {
+                if (this.dbPromise) return this.dbPromise;
+                this.dbPromise = new Promise((resolve, reject) => {
                     const request = indexedDB.open(this.dbName, 1);
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => {
+                        this.dbPromise = null;
+                        reject(request.error);
+                    };
+                    request.onsuccess = () => {
+                        const db = request.result;
+                        db.onversionchange = () => {
+                            db.close();
+                            this.dbPromise = null;
+                        };
+                        resolve(db);
+                    };
                     request.onupgradeneeded = (event) => {
                         const db = event.target.result;
                         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -2185,6 +2197,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                         }
                     };
                 });
+                return this.dbPromise;
             },
 
             async get(key) {
@@ -2207,6 +2220,16 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     request.onerror = () => reject(request.error);
                     request.onsuccess = () => resolve();
                 });
+            },
+
+            async del(key) {
+                const db = await this.openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([this.storeName], 'readwrite');
+                    const request = transaction.objectStore(this.storeName).delete(key);
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve();
+                });
             }
         };
 
@@ -2224,6 +2247,11 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         let sidebarVisible = true;
         let mediaFocusMode = false;
         let playlistClickTimer = null;
+        let activeMediaUrl = null;
+        let mediaVisualizerCleanup = null;
+        let mediaRenderRequestId = 0;
+        const MEDIA_DIRS_KEY = 'mediaDirsV2';
+        const LAST_USED_DIR_ID_KEY = 'lastUsedDirId';
 
         // --- Clip Dock (v20) ---
         let clipPointA = null;
@@ -2252,6 +2280,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         const QUICK_CLIP_AFTER_SECONDS = 3;
         const CLIP_DIAGNOSTIC_LOG_LIMIT = 1500;
         const CLIP_FFMPEG_LOG_LIMIT_PER_JOB = 250;
+        const MAX_CLIP_SOURCE_BYTES = (() => {
+            const memory = navigator.deviceMemory || 4;
+            if (memory <= 4) return 250 * 1024 * 1024;
+            if (memory <= 8) return 500 * 1024 * 1024;
+            return 1024 * 1024 * 1024;
+        })();
 
         function createClipDiagnosticId(prefix = 'trace') {
             const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -2314,7 +2348,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     sourceName: job.sourceName,
                     sourceRelativePath: job.sourceEntry?.relativePath || null,
                     range: { start: job.a, end: job.b, duration: job.b - job.a },
-                    transcode: job.transcode,
+                    outputProfile: job.outputProfile,
                     status: job.status,
                     failureStage: job.failureStage || null,
                     error: job.errorDetail || null,
@@ -2961,7 +2995,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             updateClipTasksBadge();
         }
 
-        function buildClipOutputName(sourceName, a, b, label = 'clip') {
+        function buildClipOutputName(sourceName, a, b, label = 'clip', extension = 'mp4') {
             const dot = sourceName.lastIndexOf('.');
             const base = dot > 0 ? sourceName.slice(0, dot) : sourceName;
             const pad = (n) => String(n).padStart(2, '0');
@@ -2969,7 +3003,14 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const ts = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
             const aStr = a.toFixed(3).replace('.', 'p');
             const bStr = b.toFixed(3).replace('.', 'p');
-            return `${base}-${label}-${aStr}-${bStr}-${ts}.mp4`;
+            return `${base}-${label}-${aStr}-${bStr}-${ts}.${extension}`;
+        }
+
+        function getClipOutputProfile(entry) {
+            if (entry.mediaKind === 'audio') {
+                return { extension: 'm4a', mimeType: 'audio/mp4', strategy: 'aac-transcode' };
+            }
+            return { extension: 'mp4', mimeType: 'video/mp4', strategy: 'h264-aac-transcode' };
         }
 
         async function getFfmpeg(traceId = null) {
@@ -3050,7 +3091,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             let ffmpeg = null;
             let targetDirHandle = null;
             const inputName = `in-${job.id}`;
-            const outputName = `out-${job.id}.mp4`;
+            const outputName = `out-${job.id}.${job.outputProfile.extension}`;
             const ss = job.a.toFixed(3);
             const t = (job.b - job.a).toFixed(3);
             let inputFile = null;
@@ -3062,11 +3103,32 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 sourceName: job.sourceName,
                 sourceRelativePath: job.sourceEntry.relativePath,
                 range: { start: job.a, end: job.b, duration: job.b - job.a },
-                transcode: job.transcode,
+                outputProfile: job.outputProfile,
                 media: job.mediaSnapshot,
             }, job.traceId);
 
             try {
+                stage = 'source.read';
+                const sourceFile = await job.sourceEntry.fileHandle.getFile();
+                if (sourceFile.size > MAX_CLIP_SOURCE_BYTES) {
+                    const limitMb = Math.floor(MAX_CLIP_SOURCE_BYTES / 1024 / 1024);
+                    const sizeMb = Math.ceil(sourceFile.size / 1024 / 1024);
+                    const sizeError = new Error(`源文件约 ${sizeMb} MB，超过当前设备 ${limitMb} MB 的安全剪辑上限`);
+                    sizeError.code = 'CLIP_SOURCE_TOO_LARGE';
+                    throw sizeError;
+                }
+                const ext = sourceFile.name.includes('.') ? sourceFile.name.split('.').pop() : 'mp4';
+                inputFile = `${inputName}.${ext}`;
+                clipLog('info', `${stage}.success`, {
+                    fileName: sourceFile.name,
+                    extension: ext.toLowerCase(),
+                    mimeType: sourceFile.type || '(empty)',
+                    sizeBytes: sourceFile.size,
+                    lastModified: sourceFile.lastModified
+                        ? new Date(sourceFile.lastModified).toISOString()
+                        : null,
+                }, job.traceId);
+
                 stage = 'ffmpeg.load';
                 job.status = 'loading-ffmpeg';
                 renderClipTasksList();
@@ -3091,24 +3153,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     permission: targetPermission,
                 }, job.traceId);
 
-                stage = 'source.read';
                 job.status = 'running';
                 job.progress = 0;
                 activeClipProgressJobId = job.id;
                 renderClipTasksList();
-
-                const sourceFile = await job.sourceEntry.fileHandle.getFile();
-                const ext = sourceFile.name.includes('.') ? sourceFile.name.split('.').pop() : 'mp4';
-                inputFile = `${inputName}.${ext}`;
-                clipLog('info', `${stage}.success`, {
-                    fileName: sourceFile.name,
-                    extension: ext.toLowerCase(),
-                    mimeType: sourceFile.type || '(empty)',
-                    sizeBytes: sourceFile.size,
-                    lastModified: sourceFile.lastModified
-                        ? new Date(sourceFile.lastModified).toISOString()
-                        : null,
-                }, job.traceId);
 
                 stage = 'ffmpeg.input.write';
                 const sourceBytes = await FFmpegUtil.fetchFile(sourceFile);
@@ -3117,8 +3165,19 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     virtualFile: inputFile,
                     bytes: sourceBytes.byteLength,
                 }, job.traceId);
-                const ffmpegArgs = job.transcode
+                const ffmpegArgs = job.outputProfile.strategy === 'aac-transcode'
                     ? [
+                        '-ss', ss,
+                        '-t', t,
+                        '-i', inputFile,
+                        '-map', '0:a:0',
+                        '-c:a', 'aac',
+                        '-b:a', '192k',
+                        '-movflags', '+faststart',
+                        '-avoid_negative_ts', '1',
+                        outputName,
+                    ]
+                    : [
                         '-ss', ss,
                         '-t', t,
                         '-i', inputFile,
@@ -3133,20 +3192,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                         '-movflags', '+faststart',
                         '-avoid_negative_ts', '1',
                         outputName,
-                    ]
-                    : [
-                        '-ss', ss,
-                        '-t', t,
-                        '-i', inputFile,
-                        '-c', 'copy',
-                        '-avoid_negative_ts', '1',
-                        outputName,
                     ];
 
                 stage = 'ffmpeg.exec';
                 clipLog('info', `${stage}.start`, {
                     args: ffmpegArgs,
-                    strategy: job.transcode ? 'h264-aac-transcode' : 'stream-copy',
+                    strategy: job.outputProfile.strategy,
                 }, job.traceId);
                 activeClipFfmpegJobId = job.id;
                 const execStartedAt = performance.now();
@@ -3169,7 +3220,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
                 stage = 'ffmpeg.output.read';
                 const data = await ffmpeg.readFile(outputName);
-                const blob = new Blob([data.buffer], { type: 'video/mp4' });
+                const blob = new Blob([data.buffer], { type: job.outputProfile.mimeType });
                 clipLog('info', `${stage}.success`, {
                     virtualFile: outputName,
                     bytes: blob.size,
@@ -3294,7 +3345,6 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             a,
             b,
             label = 'clip',
-            transcode = false,
             toastText = '已加入导出队列',
             traceId = createClipDiagnosticId('clip'),
         }) {
@@ -3308,12 +3358,13 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 return false;
             }
 
+            const outputProfile = getClipOutputProfile(entry);
             const sourceEntry = {
                 fileHandle: entry.fileHandle,
                 relativePath: entry.relativePath,
                 name: entry.name,
             };
-            const plannedOutputName = buildClipOutputName(entry.name, a, b, label);
+            const plannedOutputName = buildClipOutputName(entry.name, a, b, label, outputProfile.extension);
 
             const job = {
                 id: ++clipTaskIdSeq,
@@ -3328,7 +3379,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 plannedOutputName,
                 outputName: null,
                 errorMsg: null,
-                transcode,
+                outputProfile,
                 mediaSnapshot: getCurrentMediaDiagnosticSnapshot(),
                 failureStage: null,
                 errorDetail: null,
@@ -3342,7 +3393,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 sourceName: job.sourceName,
                 sourceRelativePath: job.sourceEntry.relativePath,
                 range: { start: a, end: b, duration: b - a },
-                transcode,
+                outputProfile,
                 plannedOutputName,
                 media: job.mediaSnapshot,
             }, traceId);
@@ -3436,7 +3487,6 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 a,
                 b,
                 label: 'quick-g',
-                transcode: true,
                 toastText: 'G 键片段已加入导出队列',
                 traceId,
             });
@@ -3880,21 +3930,42 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             return false;
         }
 
-        function isMediaFile(filename) {
-            return /\.(mp4|webm|ogg|mp3|wav|m4a|jpg|png|gif|flac)$/i.test(filename);
+        const MEDIA_EXTENSIONS = {
+            image: new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif']),
+            audio: new Set(['ogg', 'mp3', 'wav', 'm4a', 'flac', 'aac', 'opus']),
+            video: new Set(['mp4', 'm4v', 'webm', 'ogv', 'mov']),
+        };
+
+        function getExtension(filename) {
+            const dot = filename.lastIndexOf('.');
+            return dot > -1 ? filename.slice(dot + 1).toLowerCase() : '';
+        }
+
+        function getMediaKind(filename, mimeType = '') {
+            if (mimeType.startsWith('image/')) return 'image';
+            if (mimeType.startsWith('audio/')) return 'audio';
+            if (mimeType.startsWith('video/')) return 'video';
+            const extension = getExtension(filename);
+            return Object.entries(MEDIA_EXTENSIONS).find(([, extensions]) => extensions.has(extension))?.[0] || null;
+        }
+
+        function isMediaFile(filename, mimeType = '') {
+            return Boolean(getMediaKind(filename, mimeType));
         }
 
         async function getMediaFiles(dirHandle, relativePath = '') {
             const files = [];
 
             for await (const entry of dirHandle.values()) {
-                if (entry.kind === 'file' && isMediaFile(entry.name)) {
+                if (entry.kind === 'file') {
                     const file = await entry.getFile();
+                    const mediaKind = getMediaKind(entry.name, file.type);
+                    if (!mediaKind) continue;
                     const fileRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
                     files.push({
                         name: entry.name,
-                        url: URL.createObjectURL(file),
                         type: file.type,
+                        mediaKind,
                         fileHandle: entry,
                         parentDirHandle: dirHandle,
                         relativePath: fileRelativePath
@@ -3908,6 +3979,36 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
 
             return files;
+        }
+
+        function teardownMediaElement() {
+            mediaRenderRequestId += 1;
+            if (mediaVisualizerCleanup) {
+                mediaVisualizerCleanup();
+                mediaVisualizerCleanup = null;
+            }
+            if (mediaElement && (mediaElement.tagName === 'VIDEO' || mediaElement.tagName === 'AUDIO')) {
+                mediaElement.pause();
+                mediaElement.removeAttribute('src');
+                mediaElement.load();
+            }
+            if (activeMediaUrl) {
+                URL.revokeObjectURL(activeMediaUrl);
+                activeMediaUrl = null;
+            }
+            mediaElement = null;
+            isPlaying = false;
+        }
+
+        function restoreMediaArea({ empty = false } = {}) {
+            const container = document.getElementById('mediaArea');
+            const emptyState = empty
+                ? '<div class="media-empty-state" id="mediaEmptyState"><div class="empty-folder-icon" aria-hidden="true"></div><h1>选择媒体目录开始预览</h1><p>支持 MP4、WebM、MP3、FLAC、JPG、PNG 等常见格式</p><button type="button" id="emptyDirPicker">选择媒体目录</button></div>'
+                : '';
+            container.innerHTML = `${emptyState}<div class="control-overlay" id="controlOverlay"><div class="control-left" id="controlLeft" role="button" tabindex="0" aria-label="上一个媒体"></div><div class="control-center" id="controlCenter"><div class="control-center-left" id="controlCenterLeft" role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-indicator"><div class="progress-fill" id="progressFill"></div></div></div><div class="control-center-right" id="controlCenterRight" role="button" tabindex="0" aria-label="微调播放位置"><div class="progress-indicator"><div class="progress-fill" id="progressFillFine"></div></div></div></div><div class="control-right" id="controlRight" role="button" tabindex="0" aria-label="下一个媒体"></div></div>`;
+            initControlOverlayEvents();
+            const emptyPicker = document.getElementById('emptyDirPicker');
+            if (emptyPicker) emptyPicker.onclick = () => document.getElementById('dirPicker').click();
         }
 
         function applySidebarVisibility(visible) {
@@ -3961,8 +4062,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         async function init() {
-            const savedDirs = await idbKeyval.get('mediaDirs') || [];
-            const lastUsed = await idbKeyval.get('lastUsedDir');
+            const savedDirs = await loadSavedDirs();
+            const lastUsedId = await idbKeyval.get(LAST_USED_DIR_ID_KEY);
 
             const targetDirHandle = await getTargetDir();
             if (targetDirHandle) {
@@ -3985,10 +4086,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
             renderDirList(savedDirs);
 
-            if (lastUsed) {
-                const handle = await idbKeyval.get(lastUsed);
-                if (handle && await verifyPermission(handle)) {
-                    dirHandle = handle;
+            if (lastUsedId) {
+                const lastUsed = savedDirs.find((item) => item.id === lastUsedId);
+                if (lastUsed && await verifyPermission(lastUsed.handle)) {
+                    dirHandle = lastUsed.handle;
                     playlist = await getMediaFiles(dirHandle);
                     renderPlaylist();
                 }
@@ -4100,20 +4201,16 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 }
 
                 const newFile = await newHandle.getFile();
-                const oldUrl = entry.url;
-                const newUrl = URL.createObjectURL(newFile);
 
                 entry.name = newName;
-                entry.url = newUrl;
                 entry.type = newFile.type || entry.type;
+                entry.mediaKind = getMediaKind(newName, entry.type);
                 entry.fileHandle = newHandle;
                 entry.relativePath = replaceRelativePathFileName(entry.relativePath, newName);
 
-                if (oldUrl) URL.revokeObjectURL(oldUrl);
-
                 if (index === currentIndex) {
                     document.getElementById('currentMedia').textContent = newName;
-                    renderMediaElement(entry);
+                    await renderMediaElement(entry);
                     restoreCurrentPlaybackState(playbackState);
                 }
                 renderPlaylist();
@@ -4198,6 +4295,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 const li = document.createElement('li');
                 li.className = `playlist-item ${index === currentIndex ? 'active' : ''}`;
                 li.textContent = file.name;
+                li.tabIndex = 0;
+                li.setAttribute('role', 'button');
+                li.setAttribute('aria-label', `播放 ${file.name}；双击或按 F2 重命名`);
+                if (index === currentIndex) li.setAttribute('aria-current', 'true');
                 li.onclick = () => {
                     if (playlistClickTimer) clearTimeout(playlistClickTimer);
                     playlistClickTimer = setTimeout(() => {
@@ -4213,6 +4314,15 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                         playlistClickTimer = null;
                     }
                     beginInlineRename(index, li);
+                };
+                li.onkeydown = (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        playMedia(index);
+                    } else if (event.key === 'F2') {
+                        event.preventDefault();
+                        beginInlineRename(index, li);
+                    }
                 };
                 list.appendChild(li);
             });
@@ -4273,31 +4383,42 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         // 在renderMediaElement函数中添加保持播放速度的代码
-        function renderMediaElement(file) {
+        async function renderMediaElement(file) {
+            const requestId = ++mediaRenderRequestId;
+            let localFile;
+            try {
+                localFile = await file.fileHandle.getFile();
+            } catch (error) {
+                clipLog('error', 'media.file.read.failed', { error: serializeClipError(error) });
+                showToast(`读取媒体失败: ${error.message}`, { error: true });
+                return false;
+            }
+            if (requestId !== mediaRenderRequestId) return false;
+
+            teardownMediaElement();
+            mediaRenderRequestId = requestId;
             const container = document.getElementById('mediaArea');
-            // 保存控制层HTML
-            const controlOverlay = document.getElementById('controlOverlay').outerHTML;
-            container.innerHTML = '';
-            const type = file.type;
+            restoreMediaArea();
+            const type = localFile.type;
+            activeMediaUrl = URL.createObjectURL(localFile);
 
             // 保存当前播放速度设置
             const currentSpeed = document.getElementById('speedControl').value;
 
-            if (type.startsWith('image/')) {
+            if (file.mediaKind === 'image') {
                 const img = document.createElement('img');
-                img.src = file.url;
+                img.src = activeMediaUrl;
                 mediaElement = img;
                 container.appendChild(img);
             } else {
-                const isAudio = file.type.startsWith('audio');
-                const isVideo = file.type.startsWith('video');
+                const isAudio = file.mediaKind === 'audio';
+                const isVideo = file.mediaKind === 'video';
 
                 // 如果是视频文件且开启了音频图谱模式，则创建audio元素而不是video元素
                 if (isVideo && trackAudioSpectrum) {
                     mediaElement = document.createElement('audio');
-                    mediaElement.src = file.url;
+                    mediaElement.src = activeMediaUrl;
                     mediaElement.controls = false;
-                    mediaElement.autoplay = true;
                     mediaElement.playbackRate = parseFloat(currentSpeed);
                     mediaElement.muted = isMuted;
 
@@ -4306,27 +4427,28 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     container.appendChild(mediaElement);
 
                     // 为视频文件创建音频可视化效果
-                    createVisualizer(mediaElement, container);
+                    mediaVisualizerCleanup = createVisualizer(mediaElement, container);
                 } else {
                     // 正常处理音频和视频文件
                     mediaElement = document.createElement(isAudio ? 'audio' : 'video');
-                    mediaElement.src = file.url;
+                    mediaElement.src = activeMediaUrl;
                     mediaElement.controls = false;
-                    mediaElement.autoplay = true;
                     mediaElement.playbackRate = parseFloat(currentSpeed);
                     mediaElement.muted = isMuted;
                     container.appendChild(mediaElement);
 
                     // 只有音频文件才显示可视化效果
                     if (isAudio) {
-                        createVisualizer(mediaElement, container);
+                        mediaVisualizerCleanup = createVisualizer(mediaElement, container);
                     }
                 }
 
                 attachClipMediaDiagnostics(file, mediaElement);
                 mediaElement.onended = () => {
                     if (playMode === 'single') {
-                        mediaElement.play();
+                        mediaElement.play().catch((error) => {
+                            clipLog('warn', 'media.loop.play.failed', { error: serializeClipError(error) });
+                        });
                     } else {
                         getNextIndex();
                         playMedia(currentIndex);
@@ -4335,16 +4457,21 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 mediaElement.addEventListener('timeupdate', updateClipTimeline);
                 mediaElement.addEventListener('loadedmetadata', updateClipDockUI);
                 mediaElement.addEventListener('durationchange', updateClipDockUI);
+                mediaElement.addEventListener('play', () => {
+                    isPlaying = true;
+                    updateControls();
+                });
+                mediaElement.addEventListener('pause', () => {
+                    isPlaying = false;
+                    updateControls();
+                });
             }
 
-            // 重新添加控制层，确保在最上层
-            container.insertAdjacentHTML('beforeend', controlOverlay);
-            // 重新初始化控制层事件
-            initControlOverlayEvents();
             updateClipDockUI();
+            return true;
         }
 
-        function playMedia(index) {
+        async function playMedia(index) {
             if (index >= 0 && index < playlist.length) {
                 currentIndex = index;
                 const file = playlist[index];
@@ -4356,15 +4483,24 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     declaredMimeType: file.type || '(empty)',
                 });
                 document.getElementById('currentMedia').textContent = file.name;
-                renderMediaElement(file);
-                isPlaying = true;
+                isPlaying = false;
                 updateControls();
                 renderPlaylist();
                 resetClipPoints();
+                const rendered = await renderMediaElement(file);
+                if (!rendered || currentIndex !== index || !mediaElement
+                    || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
+                try {
+                    await mediaElement.play();
+                } catch (error) {
+                    clipLog('warn', 'media.play.failed', { error: serializeClipError(error) });
+                    showToast('媒体未能自动播放，请点击“播放”重试', { error: true });
+                }
             }
         }
 
         function getNextIndex() {
+            if (playlist.length === 0) return;
             if (playMode === 'list' || playMode === 'single') {
                 currentIndex = (currentIndex + 1) % playlist.length;
             } else if (playMode === 'random') {
@@ -4373,6 +4509,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         function getPrevIndex() {
+            if (playlist.length === 0) return;
             if (playMode === 'list' || playMode === 'single') {
                 currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
             } else if (playMode === 'random') {
@@ -4380,94 +4517,87 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
         }
 
-        async function addToSavedDirs(name, handle) {
-            const saved = await idbKeyval.get('mediaDirs') || [];
-            if (!saved.includes(name)) {
-                saved.push(name);
-                await idbKeyval.set('mediaDirs', saved);
+        async function loadSavedDirs() {
+            const current = await idbKeyval.get(MEDIA_DIRS_KEY);
+            if (Array.isArray(current)) return current;
+
+            const legacyNames = await idbKeyval.get('mediaDirs') || [];
+            const migrated = [];
+            for (const name of legacyNames) {
+                const handle = await idbKeyval.get(name);
+                if (handle) migrated.push({ id: createClipDiagnosticId('dir'), name, handle });
             }
-            await idbKeyval.set(name, handle);
-            renderDirList(saved);
+            await idbKeyval.set(MEDIA_DIRS_KEY, migrated);
+            const legacyLastUsed = await idbKeyval.get('lastUsedDir');
+            const migratedLastUsed = migrated.find((item) => item.name === legacyLastUsed);
+            if (migratedLastUsed) {
+                await idbKeyval.set(LAST_USED_DIR_ID_KEY, migratedLastUsed.id);
+            }
+            return migrated;
         }
 
-        async function removeFromSavedDirs(name) {
-            // 从mediaDirs数组中移除
-            const saved = await idbKeyval.get('mediaDirs') || [];
-            const index = saved.indexOf(name);
-            if (index > -1) {
-                saved.splice(index, 1);
-                await idbKeyval.set('mediaDirs', saved);
-            }
+        async function handlesMatch(first, second) {
+            if (!first || !second) return false;
+            if (typeof first.isSameEntry === 'function') return first.isSameEntry(second);
+            return first === second;
+        }
 
-            // 删除IndexedDB中该目录的句柄数据
-            try {
-                const db = await idbKeyval.openDB();
-                const transaction = db.transaction([idbKeyval.storeName], 'readwrite');
-                const store = transaction.objectStore(idbKeyval.storeName);
-                await new Promise((resolve, reject) => {
-                    const request = store.delete(name);
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => resolve();
-                });
-            } catch (error) {
-                console.error('删除目录数据失败:', error);
+        async function addToSavedDirs(name, handle) {
+            const saved = await loadSavedDirs();
+            const existing = await Promise.all(saved.map(async (item) => ({ item, same: await handlesMatch(item.handle, handle) })));
+            const matched = existing.find(({ same }) => same)?.item;
+            if (!matched) {
+                const record = { id: createClipDiagnosticId('dir'), name, handle };
+                saved.push(record);
+                await idbKeyval.set(MEDIA_DIRS_KEY, saved);
+                await renderDirList(saved);
+                return record;
             }
+            await renderDirList(saved);
+            return matched;
+        }
 
-            // 如果删除的是当前使用的目录，清空播放列表
-            if (dirHandle && dirHandle.name === name) {
+        async function removeFromSavedDirs(record) {
+            const saved = (await loadSavedDirs()).filter((item) => item.id !== record.id);
+            await idbKeyval.set(MEDIA_DIRS_KEY, saved);
+
+            if (await handlesMatch(dirHandle, record.handle)) {
                 dirHandle = null;
                 playlist = [];
                 currentIndex = -1;
+                teardownMediaElement();
+                restoreMediaArea({ empty: true });
+                document.getElementById('currentMedia').textContent = '请选择媒体';
                 renderPlaylist();
-                if (mediaElement) {
-                    const container = document.getElementById('mediaArea');
-                    container.innerHTML = '';
-                    mediaElement = null;
-                    document.getElementById('currentMedia').textContent = '请选择媒体';
-                }
             }
 
-            // 如果删除的是lastUsedDir，清空它
-            const lastUsed = await idbKeyval.get('lastUsedDir');
-            if (lastUsed === name) {
-                try {
-                    const db = await idbKeyval.openDB();
-                    const transaction = db.transaction([idbKeyval.storeName], 'readwrite');
-                    const store = transaction.objectStore(idbKeyval.storeName);
-                    await new Promise((resolve, reject) => {
-                        const request = store.delete('lastUsedDir');
-                        request.onerror = () => reject(request.error);
-                        request.onsuccess = () => resolve();
-                    });
-                } catch (error) {
-                    console.error('删除lastUsedDir失败:', error);
-                }
+            if (await idbKeyval.get(LAST_USED_DIR_ID_KEY) === record.id) {
+                await idbKeyval.del(LAST_USED_DIR_ID_KEY);
             }
-
-            // 重新渲染目录列表
-            renderDirList(saved);
+            await renderDirList(saved);
         }
 
-        async function renderDirList(names) {
+        async function renderDirList(records) {
             const container = document.getElementById('dirList');
             const count = document.getElementById('savedDirCount');
             const empty = document.getElementById('savedDirsEmpty');
             container.innerHTML = '';
-            if (count) count.textContent = String(names.length);
-            if (empty) empty.hidden = names.length > 0;
-            for (const name of names) {
+            if (count) count.textContent = String(records.length);
+            if (empty) empty.hidden = records.length > 0;
+            for (const record of records) {
                 const li = document.createElement('li');
                 li.className = 'dir-item';
 
                 // 目录名称部分
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'dir-item-name';
-                nameSpan.textContent = name;
-                nameSpan.onclick = async () => {
-                    const handle = await idbKeyval.get(name);
-                    if (handle && await verifyPermission(handle)) {
-                        dirHandle = handle;
-                        await idbKeyval.set('lastUsedDir', name);
+                const nameButton = document.createElement('button');
+                nameButton.type = 'button';
+                nameButton.className = 'dir-item-name';
+                nameButton.textContent = record.name;
+                nameButton.setAttribute('aria-label', `打开媒体目录 ${record.name}`);
+                nameButton.onclick = async () => {
+                    if (record.handle && await verifyPermission(record.handle)) {
+                        dirHandle = record.handle;
+                        await idbKeyval.set(LAST_USED_DIR_ID_KEY, record.id);
                         playlist = await getMediaFiles(dirHandle);
                         currentIndex = -1;
                         renderPlaylist();
@@ -4481,10 +4611,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 deleteBtn.title = '删除';
                 deleteBtn.onclick = async (e) => {
                     e.stopPropagation(); // 阻止事件冒泡
-                    await removeFromSavedDirs(name);
+                    await removeFromSavedDirs(record);
                 };
 
-                li.appendChild(nameSpan);
+                li.appendChild(nameButton);
                 li.appendChild(deleteBtn);
                 container.appendChild(li);
             }
@@ -4495,8 +4625,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 const handle = await window.showDirectoryPicker();
                 if (await verifyPermission(handle)) {
                     const name = handle.name;
-                    await idbKeyval.set('lastUsedDir', name);
-                    await addToSavedDirs(name, handle);
+                    const record = await addToSavedDirs(name, handle);
+                    await idbKeyval.set(LAST_USED_DIR_ID_KEY, record.id);
                     dirHandle = handle;
                     playlist = await getMediaFiles(dirHandle);
                     currentIndex = -1;
@@ -4581,16 +4711,19 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
         }
 
-        document.getElementById('playPauseBtn').onclick = () => {
+        document.getElementById('playPauseBtn').onclick = async () => {
             if (!mediaElement) return;
             if (mediaElement.tagName === 'VIDEO' || mediaElement.tagName === 'AUDIO') {
                 if (isPlaying) {
                     mediaElement.pause();
                 } else {
-                    mediaElement.play();
+                    try {
+                        await mediaElement.play();
+                    } catch (error) {
+                        clipLog('warn', 'media.play.retry.failed', { error: serializeClipError(error) });
+                        showToast('播放失败，请检查媒体格式或浏览器权限', { error: true });
+                    }
                 }
-                isPlaying = !isPlaying;
-                updateControls();
             }
         };
 
@@ -4862,20 +4995,15 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             await writable.close();
         }
 
-        async function resolveCopyTargetName(currentDir, fileName, sourceFile) {
-            let existing;
+        async function resolveCopyTargetName(currentDir, fileName) {
             try {
-                existing = await currentDir.getFileHandle(fileName, { create: false });
+                await currentDir.getFileHandle(fileName, { create: false });
             } catch (e) {
                 if (e.name === 'NotFoundError') return { action: 'copy', fileName };
                 throw e;
             }
-            const targetFile = await existing.getFile();
-            if (await filesLikelySame(sourceFile, targetFile)) {
-                return { action: 'skip', fileName };
-            }
             const uniqueName = await findAvailableFileName(currentDir, fileName);
-            return { action: 'copy', fileName: uniqueName };
+            return { action: 'copy', fileName: uniqueName, renamedForSafety: true };
         }
 
         async function copyEntryToTargetDir(entry) {
@@ -4911,13 +5039,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 }
 
                 const sourceFile = await entry.fileHandle.getFile();
-                const resolved = await resolveCopyTargetName(currentDir, fileName, sourceFile);
-
-                if (resolved.action === 'skip') {
-                    console.log(`已存在相同文件，跳过: ${entry.relativePath}`);
-                    showToast(`已存在相同文件 · ${resolved.fileName}`, { detail: entry.relativePath });
-                    return 'skipped';
-                }
+                const resolved = await resolveCopyTargetName(currentDir, fileName);
 
                 await writeFileToDir(currentDir, resolved.fileName, sourceFile);
 
@@ -5073,6 +5195,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 const clampedProgress = Math.max(0, Math.min(1, progress));
 
                 mediaElement.currentTime = clampedProgress * mediaElement.duration;
+                controlCenterLeft.setAttribute('aria-valuenow', String(Math.round(clampedProgress * 100)));
             }
 
             // 右侧中间区域 - 快进快退控制
@@ -5105,31 +5228,60 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
             let dragMode = null; // 'global' 或 'fine'
 
-            controlCenterLeft.onmousedown = (e) => {
+            controlCenterLeft.onpointerdown = (e) => {
                 e.preventDefault();
-                if (e.button === 0) {
+                if (e.button === 0 || e.pointerType === 'touch') {
                     isDragging = true;
                     dragMode = 'global';
+                    controlCenterLeft.setPointerCapture?.(e.pointerId);
                     updateGlobalProgress(e);
                 }
             };
 
-            controlCenterRight.onmousedown = (e) => {
+            controlCenterRight.onpointerdown = (e) => {
                 e.preventDefault();
-                if (e.button === 0) {
+                if (e.button === 0 || e.pointerType === 'touch') {
                     updateFastSeek(e);
                 }
             };
 
-            document.onmousemove = (e) => {
+            document.onpointermove = (e) => {
                 if (isDragging && dragMode === 'global') {
                     updateGlobalProgress(e);
                 }
             };
 
-            document.onmouseup = () => {
+            document.onpointerup = () => {
                 isDragging = false;
                 dragMode = null;
+            };
+
+            const activateWithKeyboard = (event, action) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    action();
+                }
+            };
+            controlLeft.onkeydown = (event) => activateWithKeyboard(event, () => {
+                getPrevIndex();
+                playMedia(currentIndex);
+            });
+            controlRight.onkeydown = (event) => activateWithKeyboard(event, () => {
+                getNextIndex();
+                playMedia(currentIndex);
+            });
+            controlCenterLeft.onkeydown = (event) => {
+                if (!mediaElement?.duration) return;
+                const delta = event.key === 'ArrowUp' ? 0.05 : event.key === 'ArrowDown' ? -0.05 : 0;
+                if (!delta) return;
+                event.preventDefault();
+                mediaElement.currentTime = Math.max(0, Math.min(mediaElement.duration, mediaElement.currentTime + mediaElement.duration * delta));
+            };
+            controlCenterRight.onkeydown = (event) => {
+                if (!mediaElement?.duration || !['ArrowUp', 'ArrowDown', 'Enter', ' '].includes(event.key)) return;
+                event.preventDefault();
+                const syntheticPointer = { clientY: event.key === 'ArrowUp' ? 0 : innerHeight };
+                updateFastSeek(syntheticPointer);
             };
 
             // 右键截图功能
@@ -5162,9 +5314,11 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const isEditing = target instanceof HTMLElement
                 && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 
+            if (isEditing) return;
+
             if (event.code === 'KeyG'
                 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
-                && !event.repeat && !isEditing) {
+                && !event.repeat) {
                 event.preventDefault();
                 enqueueQuickClipExport();
                 return;
@@ -5172,7 +5326,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
             if (event.code === 'KeyF'
                 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
-                && !event.repeat && !isEditing) {
+                && !event.repeat) {
                 event.preventDefault();
                 toggleFullscreen();
                 return;
@@ -5269,6 +5423,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const canvas = document.createElement('canvas');
             container.appendChild(canvas);
             const ctx = canvas.getContext('2d');
+            let animationFrameId = null;
+            let disposed = false;
 
             function resizeCanvas() {
                 canvas.width = container.clientWidth;
@@ -5309,7 +5465,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
 
             function draw() {
-                requestAnimationFrame(draw);
+                if (disposed) return;
+                animationFrameId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -5352,10 +5509,34 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 ctx.stroke();
             }
 
-            audioElement.addEventListener('play', () => {
-                audioCtx.resume();
-                draw();
-            });
+            const start = () => {
+                if (disposed) return;
+                audioCtx.resume().catch(() => {});
+                if (animationFrameId == null) draw();
+            };
+            const stop = () => {
+                if (animationFrameId != null) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+            };
+            audioElement.addEventListener('play', start);
+            audioElement.addEventListener('pause', stop);
+            audioElement.addEventListener('ended', stop);
+
+            return () => {
+                if (disposed) return;
+                disposed = true;
+                stop();
+                window.removeEventListener('resize', resizeCanvas);
+                audioElement.removeEventListener('play', start);
+                audioElement.removeEventListener('pause', stop);
+                audioElement.removeEventListener('ended', stop);
+                source.disconnect();
+                analyser.disconnect();
+                audioCtx.close().catch(() => {});
+                canvas.remove();
+            };
         }
     </script>
 </body>
