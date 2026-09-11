@@ -6,6 +6,10 @@ cd "$ROOT"
 
 npm install
 
+mkdir -p "$ROOT/vendor/mediabunny"
+cp node_modules/mediabunny/dist/bundles/mediabunny.min.mjs "$ROOT/vendor/mediabunny/"
+cp node_modules/mediabunny/LICENSE "$ROOT/vendor/mediabunny/"
+
 DEST="$ROOT/vendor/ffmpeg"
 mkdir -p "$DEST"
 

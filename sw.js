@@ -1,11 +1,13 @@
-const CACHE_VERSION = 'framedeck-v20-20260829-3';
+const CACHE_VERSION = 'framedeck-v20-20260911-1';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './assets/icon.svg',
   './assets/icon-192.png',
-  './assets/icon-512.png',
+    './assets/icon-512.png',
+    './assets/clip-remux.mjs',
+    './vendor/mediabunny/mediabunny.min.mjs',
   './vendor/ffmpeg/util.js',
   './vendor/ffmpeg/ffmpeg.js',
   './vendor/ffmpeg/814.ffmpeg.js'

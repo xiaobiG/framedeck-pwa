@@ -2298,6 +2298,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             if (!error) return null;
             return {
                 name: error.name || 'Error',
+                code: error.code || null,
                 message: error.message || String(error),
                 stack: error.stack || null,
                 cause: error.cause ? String(error.cause) : null,
@@ -2351,6 +2352,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     outputProfile: job.outputProfile,
                     status: job.status,
                     failureStage: job.failureStage || null,
+                    engine: job.engine || null,
+                    actualRange: job.actualRange || null,
                     error: job.errorDetail || null,
                     outputName: job.outputName,
                     progress: job.progress,
@@ -2972,6 +2975,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 } else {
                     metaText += ` · ${job.traceId}`;
                 }
+                if (job.engine === 'browser-remux') {
+                    metaText += ' · 原画质快速剪辑';
+                    if (job.actualRange) {
+                        metaText += ` · 实际 ${formatClipRange(job.actualRange.start, job.actualRange.end)}（关键帧对齐）`;
+                    }
+                }
                 meta.textContent = metaText;
                 li.appendChild(title);
                 li.appendChild(meta);
@@ -3096,6 +3105,9 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const t = (job.b - job.a).toFixed(3);
             let inputFile = null;
             let writable = null;
+            let remuxPlan = null;
+            let remuxDir = null;
+            let remuxName = null;
 
             clipLog('info', stage, {
                 jobId: job.id,
@@ -3110,6 +3122,65 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             try {
                 stage = 'source.read';
                 const sourceFile = await job.sourceEntry.fileHandle.getFile();
+                clipLog('info', 'source.read.success', {
+                    fileName: sourceFile.name, sizeBytes: sourceFile.size,
+                }, job.traceId);
+                const browserRemux = job.outputProfile.extension === 'mp4'
+                    && /\.(mp4|m4v|mov)$/i.test(sourceFile.name);
+                if (browserRemux) {
+                    job.engine = 'browser-remux';
+                    job.status = 'running';
+                    stage = 'remux.prepare';
+                    renderClipTasksList();
+                    const { prepareBrowserClip } = await import('./assets/clip-remux.mjs');
+                    remuxPlan = await prepareBrowserClip(sourceFile, job.a, job.b);
+                    job.actualRange = { start: remuxPlan.actualStart, end: remuxPlan.actualEnd };
+                    job.outputProfile.strategy = 'keyframe-remux';
+                    clipLog('info', 'remux.prepare.success', {
+                        sourceBytes: sourceFile.size, actualRange: job.actualRange,
+                        videoCodec: remuxPlan.videoCodec, audioCodec: remuxPlan.audioCodec,
+                    }, job.traceId);
+                    renderClipTasksList();
+                    stage = 'target.resolve';
+                    targetDirHandle = await ensureTargetDir({ promptIfMissing: true });
+                    if (!targetDirHandle) {
+                        throw Object.assign(new Error('未选择目标目录'), { code: 'TARGET_DIRECTORY_MISSING' });
+                    }
+                    stage = 'target.path.prepare';
+                    remuxDir = targetDirHandle;
+                    for (const dirName of job.sourceEntry.relativePath.split('/').slice(0, -1)) {
+                        remuxDir = await remuxDir.getDirectoryHandle(dirName, { create: true });
+                    }
+                    // Name the saved file after the range it actually contains.
+                    const planned = buildClipOutputName(job.sourceName,
+                        remuxPlan.actualStart, remuxPlan.actualEnd, job.type, 'mp4');
+                    stage = 'target.file.open';
+                    const availableName = await findAvailableFileName(remuxDir, planned);
+                    const handle = await remuxDir.getFileHandle(availableName, { create: true });
+                    remuxName = availableName;
+                    writable = await handle.createWritable();
+                    stage = 'remux.write';
+                    const result = await remuxPlan.write(writable, progress => {
+                        job.progress = Math.max(job.progress, progress);
+                        renderClipTasksList();
+                    });
+                    stage = 'target.file.commit';
+                    await writable.close();
+                    writable = null;
+                    job.status = 'done';
+                    job.outputName = remuxName;
+                    job.progress = 1;
+                    showToast(`剪辑已保存 · ${remuxName}`, {
+                        detail: `原画质 · 实际 ${formatClipRange(remuxPlan.actualStart, remuxPlan.actualEnd)}（关键帧对齐）`,
+                    });
+                    clipLog('info', 'job.success', {
+                        engine: job.engine, outputName: remuxName, ...result,
+                        durationMs: Math.round(performance.now() - jobStartedAt),
+                    }, job.traceId);
+                    return;
+                }
+                job.engine = 'ffmpeg-wasm';
+                stage = 'source.validate';
                 if (sourceFile.size > MAX_CLIP_SOURCE_BYTES) {
                     const limitMb = Math.floor(MAX_CLIP_SOURCE_BYTES / 1024 / 1024);
                     const sizeMb = Math.ceil(sourceFile.size / 1024 / 1024);
@@ -3276,6 +3347,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                     detail: `${err.message || '导出失败'} · ${job.traceId}`,
                 });
             } finally {
+                if (remuxPlan) remuxPlan.dispose();
+                if (remuxDir && remuxName && job.status !== 'done') {
+                    try { await remuxDir.removeEntry(remuxName); } catch (_) { /* best-effort cleanup */ }
+                }
                 activeClipFfmpegJobId = null;
                 activeClipProgressJobId = null;
                 if (ffmpeg && inputFile) {

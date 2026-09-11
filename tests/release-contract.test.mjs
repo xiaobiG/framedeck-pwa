@@ -27,5 +27,5 @@ test('media scan defers Object URL creation until a file is selected', () => {
 
 test('offline app shell does not atomically precache the FFmpeg Wasm payload', () => {
   assert.doesNotMatch(serviceWorker, /ffmpeg-core\.wasm/);
-  assert.match(serviceWorker, /CACHE_VERSION = 'framedeck-v20-20260829-3'/);
+  assert.match(serviceWorker, /CACHE_VERSION = 'framedeck-v20-20260911-1'/);
 });
