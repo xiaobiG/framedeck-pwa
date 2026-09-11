@@ -2002,6 +2002,20 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 transition-duration: 0.01ms !important;
             }
         }
+        #clipQuickBtn { flex-shrink: 0; line-height: 1.25; }
+        #clipQuickBtn small { display: block; font-size: 10px; font-weight: normal; white-space: nowrap; }
+        .clip-task-details { margin-top: 4px; font-size: 12px; color: var(--fd-muted); }
+        .clip-task-details summary { cursor: pointer; width: fit-content; padding: 3px 0; }
+        .clip-task-details > div { white-space: pre-wrap; overflow-wrap: anywhere; padding: 6px 0; }
+        .clip-task-error { color: var(--fd-text); font-size: 12px; margin-top: 4px; }
+        .toast-host { width: min(92vw, 480px); }
+        .toast { width: 100%; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; }
+        .toast-detail { font-size: 12px; line-height: 1.5; margin-top: 4px; font-weight: normal; }
+        @media (max-width: 760px) {
+            #clipQuickBtn small { font-size: 9px; }
+            .clip-dock-tasks { max-height: min(28vh, 240px); box-sizing: border-box; }
+            .clip-task-details summary { padding: 6px 0; }
+        }
     </style>
 </head>
 
@@ -2129,8 +2143,9 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             <button type="button" id="clipLoopBtn" title="A–B 循环 L">⟳</button>
             <button type="button" id="clipClearBtn" title="清除 A/B 点">清除</button>
             <button type="button" id="clipExportBtn" title="导出 A/B 片段 F5；快速保存前 2 秒后 3 秒 G">导出</button>
+            <button type="button" id="clipQuickBtn" title="保存前 2 秒、后 3 秒；按关键帧对齐（G）">快速片段<small>前2秒 / 后3秒</small></button>
             <span class="clip-dock-tasks-toggle">
-                <button type="button" id="clipTasksToggle" title="任务列表 T">▲</button>
+                <button type="button" id="clipTasksToggle" title="任务列表 T" aria-controls="clipTasksPanel" aria-expanded="false">任务</button>
                 <span id="clipTasksBadge" class="clip-dock-badge" hidden>0</span>
             </span>
         </div>
@@ -2633,6 +2648,9 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const clearBtn = document.getElementById('clipClearBtn');
             const exportBtn = document.getElementById('clipExportBtn');
             const clipable = isClipableMedia();
+            const quickBtn = document.getElementById('clipQuickBtn');
+            if (quickBtn) quickBtn.disabled = !clipable || mediaElement?.tagName !== 'VIDEO'
+                || !Number.isFinite(mediaElement.duration) || mediaElement.duration <= 0;
 
             if (btnA) {
                 btnA.textContent = clipPointA != null ? `起点 ${formatClipTime(clipPointA)}` : '设起点';
@@ -2724,7 +2742,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const panel = document.getElementById('clipTasksPanel');
             const toggle = document.getElementById('clipTasksToggle');
             if (panel) panel.hidden = !clipTasksPanelOpen;
-            if (toggle) toggle.textContent = clipTasksPanelOpen ? '▼' : '▲';
+            if (toggle) {
+                toggle.textContent = clipTasksPanelOpen ? '收起' : '任务';
+                toggle.setAttribute('aria-expanded', String(clipTasksPanelOpen));
+            }
             if (clipDockPosition) {
                 requestAnimationFrame(() => applyClipDockPosition(clipDockPosition, { persist: true }));
             }
@@ -2936,17 +2957,17 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const active = clipTasks.filter((t) =>
                 t.status === 'pending' || t.status === 'loading-ffmpeg' || t.status === 'running'
             ).length;
-            if (active > 0) {
-                badge.hidden = false;
-                badge.textContent = String(active);
-            } else {
-                badge.hidden = true;
-            }
+            badge.hidden = clipTasks.length === 0;
+            badge.textContent = String(active || clipTasks.length);
+            const toggle = document.getElementById('clipTasksToggle');
+            const failed = clipTasks.filter(job => job.status === 'error').length;
+            if (toggle) toggle.title = `任务 ${clipTasks.length} 项 · 处理中 ${active} 项 · 失败 ${failed} 项（T）`;
         }
 
         function renderClipTasksList() {
             const list = document.getElementById('clipTasksList');
             if (!list) return;
+            const expanded = new Set([...list.querySelectorAll('details[open]')].map(el => el.dataset.jobId));
             list.innerHTML = '';
             if (clipTasks.length === 0) {
                 const empty = document.createElement('li');
@@ -2961,29 +2982,39 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 li.className = `clip-task-item clip-task-item--${job.status}`;
                 const title = document.createElement('div');
                 title.className = 'clip-task-title';
-                title.textContent = job.outputName || job.sourceName;
+                title.textContent = job.sourceName;
                 title.title = job.sourceName;
                 const meta = document.createElement('div');
                 meta.className = 'clip-task-meta';
-                let metaText = `${formatClipRange(job.a, job.b)} · ${clipTaskStatusLabel(job.status)}`;
-                if (job.status === 'done' && job.outputName) {
-                    metaText = `${formatClipRange(job.a, job.b)} · ✓ ${job.outputName} · ${job.traceId}`;
-                } else if (job.status === 'error' && job.errorMsg) {
-                    metaText = `${formatClipRange(job.a, job.b)} · ${job.errorMsg} · ${job.traceId}`;
-                } else if (job.status === 'running' && job.progress > 0) {
-                    metaText += ` · ${Math.round(job.progress * 100)}%`;
-                } else {
-                    metaText += ` · ${job.traceId}`;
-                }
-                if (job.engine === 'browser-remux') {
-                    metaText += ' · 原画质快速剪辑';
-                    if (job.actualRange) {
-                        metaText += ` · 实际 ${formatClipRange(job.actualRange.start, job.actualRange.end)}（关键帧对齐）`;
-                    }
-                }
+                const range = job.actualRange || { start: job.a, end: job.b };
+                let metaText = `${formatClipRange(range.start, range.end)} · ${clipTaskStatusLabel(job.status)}`;
+                if (job.engine === 'browser-remux') metaText += ' · 关键帧对齐';
+                if (job.status === 'running' && job.progress > 0) metaText += ` ${Math.round(job.progress * 100)}%`;
                 meta.textContent = metaText;
                 li.appendChild(title);
                 li.appendChild(meta);
+                if (job.status === 'error') {
+                    const reason = document.createElement('div');
+                    reason.className = 'clip-task-error';
+                    reason.textContent = job.userError || '导出失败，请查看详情';
+                    li.appendChild(reason);
+                }
+                const details = document.createElement('details');
+                details.className = 'clip-task-details';
+                details.dataset.jobId = String(job.id);
+                details.open = expanded.has(String(job.id));
+                const summary = document.createElement('summary');
+                summary.textContent = '详情';
+                details.appendChild(summary);
+                const info = document.createElement('div');
+                info.textContent = [
+                    `所选范围：${formatClipRange(job.a, job.b)}`,
+                    job.outputName && `已保存：${job.outputName}`,
+                    job.errorMsg && `错误详情：${job.errorMsg}`,
+                    `诊断编号：${job.traceId}`,
+                ].filter(Boolean).join('\n');
+                details.appendChild(info);
+                li.appendChild(details);
                 if (job.status === 'pending' || job.status === 'loading-ffmpeg'
                     || job.status === 'running') {
                     const progWrap = document.createElement('div');
@@ -3092,6 +3123,17 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 ffmpegLoadPromise = null;
                 throw err;
             }
+        }
+
+        function getClipUserError(error) {
+            if (error.name === 'QuotaExceededError') return '存储空间不足，请清理空间或更换目标目录后重试';
+            if (['NotAllowedError', 'SecurityError'].includes(error.name)) return '没有文件访问权限，请重新选择媒体目录和目标目录';
+            if (error.name === 'NotFoundError') return '文件或目录已移动，请重新选择';
+            if (error.name === 'NotReadableError') return '无法读取源文件，请检查文件是否被占用或磁盘是否已断开';
+            if (error.name === 'AbortError') return '操作已取消，可以重新导出';
+            if (error.code === 'TARGET_DIRECTORY_MISSING') return '请先选择目标目录，再重新导出';
+            if (/[\u3400-\u9fff]/.test(error.message || '')) return error.message;
+            return '未能完成导出，请检查源文件和目标目录；具体原因可在任务详情中查看';
         }
 
         async function runClipExportJob(job) {
@@ -3336,15 +3378,16 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 job.errorDetail = serializeClipError(err);
                 job.status = 'error';
                 job.errorMsg = `${stage}: ${err.message || '导出失败'}`;
+                job.userError = getClipUserError(err);
                 clipLog('error', 'job.failed', {
                     failureStage: stage,
                     durationMs: Math.round(performance.now() - jobStartedAt),
                     error: job.errorDetail,
                 }, job.traceId);
-                showToast(`剪辑失败（${stage}）`, {
+                showToast('剪辑失败', {
                     error: true,
                     duration: 5000,
-                    detail: `${err.message || '导出失败'} · ${job.traceId}`,
+                    detail: job.userError,
                 });
             } finally {
                 if (remuxPlan) remuxPlan.dispose();
@@ -3472,13 +3515,6 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 plannedOutputName,
                 media: job.mediaSnapshot,
             }, traceId);
-            if (!clipTasksPanelOpen) {
-                clipTasksPanelOpen = true;
-                const panel = document.getElementById('clipTasksPanel');
-                const toggle = document.getElementById('clipTasksToggle');
-                if (panel) panel.hidden = false;
-                if (toggle) toggle.textContent = '▼';
-            }
             renderClipTasksList();
             showToast(toastText, { detail: `${sourceEntry.name} · ${formatClipRange(a, b)}` });
 
@@ -3573,6 +3609,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             document.getElementById('clipLoopBtn').onclick = () => toggleAbLoop();
             document.getElementById('clipClearBtn').onclick = () => clearClipPoints();
             document.getElementById('clipExportBtn').onclick = () => enqueueClipExport();
+            document.getElementById('clipQuickBtn').onclick = () => enqueueQuickClipExport();
             document.getElementById('clipTasksToggle').onclick = () => toggleClipTasksPanel();
             document.getElementById('clipCopyLogsBtn').onclick = () => copyClipDiagnosticLogs();
             document.getElementById('clipDownloadLogsBtn').onclick = () => downloadClipDiagnosticLogs();
@@ -4120,7 +4157,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const toast = document.createElement('div');
             toast.className = `toast ${error ? 'toast--error' : 'toast--success'}`;
             toast.textContent = message;
-            if (detail) toast.title = detail;
+            if (detail) {
+                const description = document.createElement('div');
+                description.className = 'toast-detail';
+                description.textContent = detail;
+                toast.appendChild(description);
+            }
             host.appendChild(toast);
 
             requestAnimationFrame(() => toast.classList.add('toast--visible'));
@@ -5050,12 +5092,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         async function findAvailableFileName(currentDir, baseName) {
-            let candidate = buildTimestampFileName(baseName);
+            let candidate = baseName;
             let n = 2;
             while (true) {
                 try {
                     await currentDir.getFileHandle(candidate, { create: false });
-                    candidate = appendNumericSuffix(buildTimestampFileName(baseName), n++);
+                    candidate = appendNumericSuffix(baseName, n++);
                 } catch (e) {
                     if (e.name === 'NotFoundError') return candidate;
                     throw e;
@@ -5077,7 +5119,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 if (e.name === 'NotFoundError') return { action: 'copy', fileName };
                 throw e;
             }
-            const uniqueName = await findAvailableFileName(currentDir, fileName);
+            const uniqueName = await findAvailableFileName(currentDir, buildTimestampFileName(fileName));
             return { action: 'copy', fileName: uniqueName, renamedForSafety: true };
         }
 
@@ -5390,6 +5432,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 
             if (isEditing) return;
+            if (event.defaultPrevented) return;
+            const interactive = target instanceof Element
+                && target.closest('button, a[href], summary, [role="button"], [role="slider"]');
+            if (interactive && ['Space', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) return;
 
             if (event.code === 'KeyG'
                 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
