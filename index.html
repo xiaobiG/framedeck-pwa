@@ -1670,6 +1670,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             opacity: 1;
         }
 
+        body.is-fullscreen:not(.fullscreen-clip-visible) .clip-dock {
+            display: none !important;
+        }
+
         body.is-fullscreen .clip-dock,
         body.is-fullscreen:has(.app.sidebar-collapsed) .clip-dock {
             --clip-dock-width: min(920px, calc(100vw - 32px));
@@ -3642,12 +3646,15 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         function syncFullscreenUI() {
             const active = Boolean(getFullscreenElement());
+            if (active !== document.body.classList.contains('is-fullscreen')) {
+                document.body.classList.remove('fullscreen-clip-visible');
+            }
             document.body.classList.toggle('is-fullscreen', active);
             const button = document.getElementById('fullscreenBtn');
             if (button) {
                 button.textContent = active ? '退出全屏' : '全屏';
                 button.setAttribute('aria-pressed', String(active));
-                button.title = active ? '退出全屏 (F / Esc)' : '进入全屏 (F)';
+                button.title = active ? '退出全屏 (F / Esc)；剪辑浮窗显示/隐藏 (C)' : '进入全屏 (F)；全屏后按 C 显示剪辑浮窗';
             }
             window.dispatchEvent(new Event('resize'));
         }
@@ -5436,6 +5443,18 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const interactive = target instanceof Element
                 && target.closest('button, a[href], summary, [role="button"], [role="slider"]');
             if (interactive && ['Space', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) return;
+
+            if (event.code === 'KeyC' && getFullscreenElement()
+                && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+                && !event.repeat) {
+                event.preventDefault();
+                const visible = document.body.classList.toggle('fullscreen-clip-visible');
+                if (!visible && document.activeElement?.closest('.clip-dock')) {
+                    document.activeElement.blur();
+                }
+                window.dispatchEvent(new Event('resize'));
+                return;
+            }
 
             if (event.code === 'KeyG'
                 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
