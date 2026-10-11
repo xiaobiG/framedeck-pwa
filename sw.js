@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'framedeck-v20-20260925-1';
+const CACHE_VERSION = 'framedeck-v20-20261011-1';
 const APP_SHELL = [
   './',
   './index.html',

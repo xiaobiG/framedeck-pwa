@@ -1155,6 +1155,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         select:focus-visible,
         summary:focus-visible,
         .playlist-item:focus-visible,
+        .playlist-name:focus-visible,
         .dir-item-name:focus-visible {
             outline: 2px solid var(--fd-accent);
             outline-offset: 2px;
@@ -1315,6 +1316,23 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             color: var(--fd-text);
             box-shadow: none;
         }
+
+        .playlist-item { display: flex; align-items: center; gap: 8px; }
+        .playlist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .controls button.source-delete,
+        button.source-delete {
+            flex-shrink: 0;
+            color: #b42318;
+            background: rgba(220, 38, 38, 0.08);
+            border: 1px solid rgba(220, 38, 38, 0.35);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 0.75rem;
+        }
+        .controls button.source-delete:hover,
+        button.source-delete:hover { background: rgba(220, 38, 38, 0.18); }
+        body[data-theme="dark"] button.source-delete { color: #ffaaa2; }
+        button.source-delete:disabled { opacity: 0.45; cursor: not-allowed; }
 
         .sidebar-empty {
             padding: 18px 10px;
@@ -1857,7 +1875,9 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 box-sizing: border-box;
             }
 
-            .control-group--media,
+            .control-group--media { display: inline-flex; flex: 0 0 auto; max-width: none; }
+            #currentMedia { display: none; }
+
             .controls > #screenshotFormatRow,
             .controls > #toolbarUtilityRow {
                 display: none;
@@ -2102,6 +2122,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 </details>
                 <div class="control-group control-group--media">
                     <span id="currentMedia">请选择媒体</span>
+                    <button id="deleteSourceBtn" class="source-delete" type="button" disabled aria-label="删除当前磁盘源文件">删除源文件</button>
                 </div>
             </div>
             <div class="media-area" id="mediaArea">
@@ -2256,6 +2277,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         let playlist = [];
         let currentIndex = -1;
+        let sourceOperation = null; // Serializes deletion, rename, copy and directory changes.
         let isPlaying = false;
         let playMode = 'single';
         let mediaElement = null;
@@ -3470,6 +3492,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             toastText = '已加入导出队列',
             traceId = createClipDiagnosticId('clip'),
         }) {
+            if (sourceOperationBlocked()) return false;
             const entry = playlist[currentIndex];
             if (!entry || !entry.fileHandle || !entry.relativePath) {
                 clipLog('error', 'enqueue.rejected', {
@@ -4126,6 +4149,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 : '';
             container.innerHTML = `${emptyState}<div class="control-overlay" id="controlOverlay"><div class="control-left" id="controlLeft" role="button" tabindex="0" aria-label="上一个媒体"></div><div class="control-center" id="controlCenter"><div class="control-center-left" id="controlCenterLeft" role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-indicator"><div class="progress-fill" id="progressFill"></div></div></div><div class="control-center-right" id="controlCenterRight" role="button" tabindex="0" aria-label="微调播放位置"><div class="progress-indicator"><div class="progress-fill" id="progressFillFine"></div></div></div></div><div class="control-right" id="controlRight" role="button" tabindex="0" aria-label="下一个媒体"></div></div>`;
             initControlOverlayEvents();
+            if (empty && dirHandle && playlist.length === 0) {
+                document.querySelector('#mediaEmptyState h1').textContent = '当前目录没有媒体文件';
+                document.querySelector('#mediaEmptyState p').textContent = '可选择其他媒体目录继续预览';
+            }
             const emptyPicker = document.getElementById('emptyDirPicker');
             if (emptyPicker) emptyPicker.onclick = () => document.getElementById('dirPicker').click();
         }
@@ -4280,7 +4307,130 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
         }
 
+        function sourceOperationBlocked() {
+            if (!sourceOperation) return false;
+            showToast(`正在${sourceOperation}，请完成后重试`, { error: true });
+            return true;
+        }
+
+        function updateSourceDeleteControls() {
+            document.querySelectorAll('.source-delete').forEach((button) => {
+                button.disabled = Boolean(sourceOperation)
+                    || (button.id === 'deleteSourceBtn' && !playlist[currentIndex]);
+            });
+        }
+
+        async function runSourceOperation(label, action) {
+            if (sourceOperationBlocked()) return false;
+            sourceOperation = label;
+            updateSourceDeleteControls();
+            try {
+                return await action();
+            } finally {
+                sourceOperation = null;
+                updateSourceDeleteControls();
+            }
+        }
+
+        function hasActiveSourceExports() {
+            return clipTasks.some((job) => !['done', 'error'].includes(job.status));
+        }
+
+        function getSourceDeleteError(error) {
+            if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+                return '没有目录写入权限，请重新选择媒体目录并允许读写后重试';
+            }
+            if (error?.name === 'NotFoundError') return '源文件已移动或不存在，请重新打开媒体目录核对';
+            if (error?.name === 'InvalidModificationError' || error?.name === 'NoModificationAllowedError') {
+                return '文件被占用或目录不可写，请关闭占用程序并检查目录权限后重试';
+            }
+            return '请检查文件是否被占用、目录是否可写，重新打开媒体目录后重试';
+        }
+
+        async function deleteSourceEntry(entry) {
+            return runSourceOperation('删除源文件', async () => {
+                if (!entry || !playlist.includes(entry) || entry.deleted
+                    || !entry.fileHandle || !entry.parentDirHandle || !entry.relativePath) {
+                    showToast('文件信息已失效，请重新打开媒体目录', { error: true });
+                    return false;
+                }
+                // Conservatively block all exports, including aliases from previously opened directories.
+                if (hasActiveSourceExports()) {
+                    showToast('导出队列仍有任务，请等待导出完成后再删除源文件', { error: true });
+                    return false;
+                }
+                const snapshot = {
+                    list: playlist, root: dirHandle, entry,
+                    parent: entry.parentDirHandle, handle: entry.fileHandle,
+                    name: entry.name, path: entry.relativePath,
+                };
+                if (!window.confirm(`永久删除磁盘源文件？\n\n${snapshot.path}\n\n这会永久删除本地源文件，不只是从播放列表移除，也不会移入回收站。此操作无法撤销。`)) {
+                    return false;
+                }
+                const stillValid = () => playlist === snapshot.list && dirHandle === snapshot.root
+                    && playlist.includes(entry) && !entry.deleted
+                    && entry.name === snapshot.name && entry.relativePath === snapshot.path
+                    && entry.fileHandle === snapshot.handle && entry.parentDirHandle === snapshot.parent;
+                try {
+                    if (!(await verifyPermission(snapshot.parent, true))) {
+                        showToast('未删除：没有目录写入权限，请重新选择媒体目录并允许读写后重试', { error: true });
+                        return false;
+                    }
+                    const liveHandle = await snapshot.parent.getFileHandle(snapshot.name, { create: false });
+                    if (!(await handlesMatch(snapshot.handle, liveHandle)) || !stillValid()) {
+                        showToast('未删除：文件或媒体目录已变化，请重新打开目录核对后重试', { error: true });
+                        return false;
+                    }
+                    await snapshot.parent.removeEntry(snapshot.name, { recursive: false });
+                } catch (error) {
+                    showToast(`未删除：${getSourceDeleteError(error)}`, { error: true, detail: snapshot.path });
+                    return false;
+                }
+
+                // Disk deletion has succeeded. Preview failures must never be reported as deletion failures.
+                entry.deleted = true;
+                try {
+                    if (playlist === snapshot.list && dirHandle === snapshot.root) {
+                        const selected = playlist[currentIndex];
+                        const index = playlist.indexOf(entry);
+                        if (index !== -1) {
+                            playlist.splice(index, 1);
+                            if (selected === entry) {
+                                teardownMediaElement();
+                                restoreMediaArea({ empty: true });
+                                currentIndex = playlist.length ? Math.min(index, playlist.length - 1) : -1;
+                                document.getElementById('currentMedia').textContent = playlist.length ? playlist[currentIndex].name : '当前目录没有媒体文件';
+                                resetClipPoints();
+                                updateControls();
+                                renderPlaylist();
+                                if (currentIndex !== -1 && !(await playMedia(currentIndex))) {
+                                    showToast('源文件已永久删除，但下一项预览未能加载，请重新选择媒体', { error: true, detail: snapshot.path });
+                                    return true;
+                                }
+                            } else {
+                                currentIndex = playlist.indexOf(selected);
+                                renderPlaylist();
+                            }
+                        }
+                    }
+                    showToast('已永久删除源文件', { detail: snapshot.path });
+                } catch (error) {
+                    showToast('源文件已永久删除，但预览更新失败，请重新打开媒体目录', { error: true, detail: snapshot.path });
+                }
+                return true;
+            });
+        }
+
+        document.getElementById('deleteSourceBtn').onclick = (event) => {
+            event.stopPropagation();
+            deleteSourceEntry(playlist[currentIndex]);
+        };
+
         async function renamePlaylistEntry(index, rawName) {
+            return runSourceOperation('重命名', () => renamePlaylistEntryUnlocked(index, rawName));
+        }
+
+        async function renamePlaylistEntryUnlocked(index, rawName) {
             const entry = playlist[index];
             if (!entry || !entry.fileHandle || !entry.parentDirHandle || !entry.relativePath) {
                 showToast('文件信息不完整，无法重命名', { error: true });
@@ -4348,6 +4498,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         function beginInlineRename(index, hostEl) {
+            if (sourceOperationBlocked()) return;
             const entry = playlist[index];
             if (!entry || !hostEl || hostEl.querySelector('.rename-input')) return;
 
@@ -4385,10 +4536,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 }
                 finished = true;
                 input.disabled = true;
-                const renamed = await renamePlaylistEntry(index, nextName);
-                if (playlist[index]) {
-                    hostEl.textContent = playlist[index].name;
-                }
+                await renamePlaylistEntry(playlist.indexOf(entry), nextName);
+                hostEl.textContent = entry.name;
             };
 
             input.addEventListener('click', (event) => event.stopPropagation());
@@ -4414,19 +4563,26 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             const empty = document.getElementById('playlistEmpty');
             list.innerHTML = '';
             if (count) count.textContent = String(playlist.length);
-            if (empty) empty.hidden = playlist.length > 0;
+            if (empty) {
+                empty.hidden = playlist.length > 0;
+                empty.textContent = dirHandle ? '当前目录没有媒体文件' : '选择媒体目录后，这里会显示文件';
+            }
             playlist.forEach((file, index) => {
                 const li = document.createElement('li');
                 li.className = `playlist-item ${index === currentIndex ? 'active' : ''}`;
-                li.textContent = file.name;
-                li.tabIndex = 0;
-                li.setAttribute('role', 'button');
-                li.setAttribute('aria-label', `播放 ${file.name}；双击或按 F2 重命名`);
+                const name = document.createElement('span');
+                name.className = 'playlist-name';
+                name.textContent = file.name;
+                name.title = file.relativePath;
+                li.appendChild(name);
+                name.tabIndex = 0;
+                name.setAttribute('role', 'button');
+                name.setAttribute('aria-label', `播放 ${file.name}；双击或按 F2 重命名`);
                 if (index === currentIndex) li.setAttribute('aria-current', 'true');
                 li.onclick = () => {
                     if (playlistClickTimer) clearTimeout(playlistClickTimer);
                     playlistClickTimer = setTimeout(() => {
-                        playMedia(index);
+                        playMedia(playlist.indexOf(file));
                         playlistClickTimer = null;
                     }, 180);
                 };
@@ -4437,20 +4593,36 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                         clearTimeout(playlistClickTimer);
                         playlistClickTimer = null;
                     }
-                    beginInlineRename(index, li);
+                    beginInlineRename(playlist.indexOf(file), name);
                 };
                 li.onkeydown = (event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        playMedia(index);
+                        playMedia(playlist.indexOf(file));
                     } else if (event.key === 'F2') {
                         event.preventDefault();
-                        beginInlineRename(index, li);
+                        beginInlineRename(playlist.indexOf(file), name);
                     }
                 };
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'source-delete';
+                deleteButton.textContent = '删除';
+                deleteButton.title = `删除磁盘源文件 ${file.relativePath}`;
+                deleteButton.setAttribute('aria-label', deleteButton.title);
+                deleteButton.onclick = (event) => {
+                    event.stopPropagation();
+                    if (playlistClickTimer) clearTimeout(playlistClickTimer);
+                    playlistClickTimer = null;
+                    deleteSourceEntry(file);
+                };
+                deleteButton.ondblclick = (event) => event.stopPropagation();
+                deleteButton.onkeydown = (event) => event.stopPropagation();
+                li.appendChild(deleteButton);
                 list.appendChild(li);
             });
 
+            updateSourceDeleteControls();
             if (playlist.length > 0 && currentIndex === -1) {
                 playMedia(0);
             }
@@ -4459,6 +4631,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         function updateControls() {
             document.getElementById('playPauseBtn').textContent =
                 isPlaying ? '暂停' : '播放';
+            for (const id of ['playPauseBtn', 'prevBtn', 'nextBtn', 'speedControl', 'screenshotBtn', 'copyFileBtn']) {
+                document.getElementById(id).disabled = !playlist[currentIndex];
+            }
+            updateSourceDeleteControls();
         }
 
         // 添加播放速度控制功能
@@ -4508,16 +4684,18 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         // 在renderMediaElement函数中添加保持播放速度的代码
         async function renderMediaElement(file) {
+            if (file.deleted) return false;
             const requestId = ++mediaRenderRequestId;
             let localFile;
             try {
                 localFile = await file.fileHandle.getFile();
             } catch (error) {
+                if (requestId !== mediaRenderRequestId || file.deleted) return false;
                 clipLog('error', 'media.file.read.failed', { error: serializeClipError(error) });
                 showToast(`读取媒体失败: ${error.message}`, { error: true });
                 return false;
             }
-            if (requestId !== mediaRenderRequestId) return false;
+            if (requestId !== mediaRenderRequestId || file.deleted) return false;
 
             teardownMediaElement();
             mediaRenderRequestId = requestId;
@@ -4612,15 +4790,17 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 renderPlaylist();
                 resetClipPoints();
                 const rendered = await renderMediaElement(file);
-                if (!rendered || currentIndex !== index || !mediaElement
-                    || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
+                if (!rendered || playlist[currentIndex] !== file || file.deleted || !mediaElement) return false;
+                if (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO') return true;
                 try {
                     await mediaElement.play();
                 } catch (error) {
                     clipLog('warn', 'media.play.failed', { error: serializeClipError(error) });
                     showToast('媒体未能自动播放，请点击“播放”重试', { error: true });
                 }
+                return true;
             }
+            return false;
         }
 
         function getNextIndex() {
@@ -4682,6 +4862,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         async function removeFromSavedDirs(record) {
+            return runSourceOperation('移除目录记录', () => removeFromSavedDirsUnlocked(record));
+        }
+
+        async function removeFromSavedDirsUnlocked(record) {
             const saved = (await loadSavedDirs()).filter((item) => item.id !== record.id);
             await idbKeyval.set(MEDIA_DIRS_KEY, saved);
 
@@ -4718,7 +4902,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                 nameButton.className = 'dir-item-name';
                 nameButton.textContent = record.name;
                 nameButton.setAttribute('aria-label', `打开媒体目录 ${record.name}`);
-                nameButton.onclick = async () => {
+                nameButton.onclick = () => runSourceOperation('打开媒体目录', async () => {
                     if (record.handle && await verifyPermission(record.handle)) {
                         dirHandle = record.handle;
                         await idbKeyval.set(LAST_USED_DIR_ID_KEY, record.id);
@@ -4726,13 +4910,14 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
                         currentIndex = -1;
                         renderPlaylist();
                     }
-                };
+                });
 
-                // 删除按钮
+                // 仅移除已保存的授权记录，不删除目录或源文件
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'dir-item-delete';
                 deleteBtn.textContent = '×';
-                deleteBtn.title = '删除';
+                deleteBtn.title = '移除保存记录（不删除磁盘文件）';
+                deleteBtn.setAttribute('aria-label', `${deleteBtn.title} ${record.name}`);
                 deleteBtn.onclick = async (e) => {
                     e.stopPropagation(); // 阻止事件冒泡
                     await removeFromSavedDirs(record);
@@ -4744,7 +4929,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             }
         }
 
-        document.getElementById('dirPicker').onclick = async () => {
+        document.getElementById('dirPicker').onclick = () => runSourceOperation('打开媒体目录', async () => {
             try {
                 const handle = await window.showDirectoryPicker();
                 if (await verifyPermission(handle)) {
@@ -4759,7 +4944,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             } catch (err) {
                 console.error('目录选择失败', err);
             }
-        };
+        });
 
         // 目标目录管理
         async function getTargetDir() {
@@ -5131,6 +5316,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         async function copyEntryToTargetDir(entry) {
+            return runSourceOperation('复制文件', () => copyEntryToTargetDirUnlocked(entry));
+        }
+
+        async function copyEntryToTargetDirUnlocked(entry) {
             if (!entry.fileHandle || !entry.relativePath) {
                 console.error('文件信息不完整，无法复制');
                 showToast('文件信息不完整，无法复制', { error: true });
@@ -5420,7 +5609,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             };
         }
 
-        init();
+        runSourceOperation('恢复媒体目录', init);
         initTheme();
         initToolbarMenu();
         initControlOverlay();
