@@ -26,8 +26,8 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             --color-text: #333333;
             --color-muted: #666666;
             --color-soft: #999999;
-            --color-primary: #4a90e2;
-            --color-primary-hover: #357abd;
+            --color-primary: var(--fd-accent);
+            --color-primary-hover: var(--fd-accent-hover);
             --color-danger: #e53935;
             --color-success: #4caf50;
             --glass-bg: rgba(255, 255, 255, 0.58);
@@ -39,25 +39,19 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             --radius-control: 14px;
             --radius-small: 12px;
             --blur-glass: blur(22px) saturate(170%);
-            --page-bg:
-                radial-gradient(circle at 12% 18%, rgba(74, 144, 226, 0.22), transparent 30%),
-                radial-gradient(circle at 82% 8%, rgba(172, 120, 255, 0.18), transparent 28%),
-                linear-gradient(135deg, #eef3f8 0%, #dfe8f0 48%, #f7f9fb 100%);
+            --page-bg: var(--fd-bg);
         }
 
         body[data-theme="dark"] {
             --color-text: #eef3f8;
             --color-muted: rgba(238, 243, 248, 0.76);
             --color-soft: rgba(238, 243, 248, 0.56);
-            --glass-bg: rgba(22, 28, 38, 0.58);
-            --glass-bg-strong: rgba(34, 42, 56, 0.74);
-            --glass-border: rgba(255, 255, 255, 0.16);
+            --glass-bg: var(--fd-surface);
+            --glass-bg-strong: var(--fd-surface-raised);
+            --glass-border: var(--fd-border);
             --glass-shadow: 0 18px 56px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.12);
             --glass-shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.24);
-            --page-bg:
-                radial-gradient(circle at 12% 18%, rgba(74, 144, 226, 0.24), transparent 30%),
-                radial-gradient(circle at 82% 8%, rgba(172, 120, 255, 0.18), transparent 28%),
-                linear-gradient(135deg, #101722 0%, #162130 52%, #0d1118 100%);
+            --page-bg: var(--fd-bg);
         }
 
         /* 基础样式 */
@@ -168,12 +162,12 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             box-sizing: border-box;
             padding: 8px 12px;
             border-radius: 12px;
-            border: 1px solid rgba(74, 144, 226, 0.72);
-            background: rgba(255, 255, 255, 0.94);
-            color: #222;
+            border: 1px solid var(--fd-accent-ink);
+            background: var(--fd-surface);
+            color: var(--fd-text);
             font: inherit;
             outline: none;
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.16);
+            box-shadow: 0 0 0 3px var(--fd-focus-ring);
         }
 
         #currentMedia .rename-input {
@@ -259,14 +253,6 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         .dir-item-delete:hover {
             background: #ff4444;
             color: #ffffff;
-        }
-
-        .playlist-item.active {
-            background: color-mix(in srgb, var(--color-primary) 90%, transparent);
-            color: #ffffff;
-            border-color: rgba(74, 144, 226, 0.72);
-            font-weight: 500;
-            box-shadow: 0 8px 22px rgba(74, 144, 226, 0.22);
         }
 
         .app .sidebar {
@@ -516,7 +502,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         #speedControl:focus,
         #screenshotFormat:focus {
             outline: none;
-            border-color: #4a90e2;
+            border-color: var(--fd-accent-ink);
         }
 
         .controls label,
@@ -625,7 +611,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             position: absolute;
             bottom: 0;
             width: 100%;
-            background: rgba(74, 144, 226, 0);
+            background: transparent;
             border-radius: 2px;
             transition: height 0.1s;
         }
@@ -763,21 +749,21 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         .clip-timeline-progress {
             width: 0;
-            background: rgba(74, 144, 226, 0.32);
+            background: var(--fd-accent-progress);
         }
 
         .clip-timeline-progress--center {
             left: 50%;
             width: 2px;
             transform: translateX(-50%);
-            background: rgba(20, 40, 70, 0.55);
+            background: var(--fd-text);
             z-index: 3;
         }
 
         .clip-timeline-selection {
             width: 0;
-            background: rgba(74, 144, 226, 0.72);
-            box-shadow: 0 0 18px rgba(74, 144, 226, 0.28);
+            background: var(--fd-accent-selection);
+            box-shadow: 0 0 18px var(--fd-accent-soft);
         }
 
         .clip-timeline-disabled {
@@ -806,9 +792,9 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             width: 7px;
             height: 20px;
             border-radius: 999px;
-            background: #ffffff;
-            border: 1px solid rgba(74, 144, 226, 0.8);
-            box-shadow: 0 2px 8px rgba(40, 60, 90, 0.24);
+            background: var(--fd-surface);
+            border: 1px solid var(--fd-accent-ink);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
             transform: translate(-50%, -50%);
             opacity: 0;
             cursor: grab;
@@ -820,7 +806,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         .clip-timeline-marker:hover,
         .clip-timeline-marker--editing {
             transform: translate(-50%, -50%) scale(1.22);
-            box-shadow: 0 3px 12px rgba(40, 80, 140, 0.34);
+            box-shadow: 0 0 0 3px var(--fd-focus-ring), 0 3px 12px rgba(0, 0, 0, 0.34);
         }
 
         .clip-timeline-marker--visible {
@@ -832,7 +818,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         .clip-timeline-marker--b {
-            background: var(--color-primary);
+            background: var(--fd-accent-ink);
         }
 
         .clip-timeline-meta {
@@ -890,31 +876,6 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             cursor: not-allowed;
         }
 
-        .clip-dock-bar button.clip-dock-btn--active {
-            background: #4a90e2;
-            color: #fff;
-            border-color: #4a90e2;
-        }
-
-        .clip-dock-bar button.clip-dock-btn--active:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 1);
-            color: #333;
-            border-color: rgba(0, 0, 0, 0.08);
-        }
-
-        .clip-dock-bar button.clip-dock-btn--editing {
-            background: #1767d1;
-            color: #fff;
-            border-color: rgba(23, 103, 209, 0.95);
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.22);
-        }
-
-        .clip-dock-bar button.clip-dock-btn--editing:hover:not(:disabled) {
-            background: #1767d1;
-            color: #fff;
-            border-color: rgba(23, 103, 209, 0.95);
-        }
-
         .clip-dock-bar button#clipMarkA,
         .clip-dock-bar button#clipMarkB {
             flex: 1 1 92px;
@@ -925,16 +886,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         }
 
         .clip-dock-bar button#clipExportBtn {
-            background: #4a90e2;
-            color: #fff;
-            border-color: #4a90e2;
             padding: 0 14px;
-        }
-
-        .clip-dock-bar button#clipExportBtn:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 1);
-            color: #333;
-            border-color: rgba(0, 0, 0, 0.08);
         }
 
         .clip-dock-duration {
@@ -1033,18 +985,18 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             font-size: 0.8125rem;
         }
 
-        .clip-task-item--done {
+        .clip-task-item.clip-task-item--done {
             border-left: 3px solid #4caf50;
         }
 
-        .clip-task-item--error {
+        .clip-task-item.clip-task-item--error {
             border-left: 3px solid #e53935;
         }
 
-        .clip-task-item--running,
-        .clip-task-item--loading-ffmpeg,
-        .clip-task-item--pending {
-            border-left: 3px solid #4a90e2;
+        .clip-task-item.clip-task-item--running,
+        .clip-task-item.clip-task-item--loading-ffmpeg,
+        .clip-task-item.clip-task-item--pending {
+            border-left: 3px solid var(--fd-accent-ink);
         }
 
         .clip-task-title {
@@ -1070,7 +1022,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
 
         .clip-task-progress-bar {
             height: 100%;
-            background: #4a90e2;
+            background: var(--fd-accent-ink);
             border-radius: 2px;
             transition: width 0.15s ease;
         }
@@ -1103,8 +1055,11 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             --fd-text: #f3f6fa;
             --fd-muted: #99a5b3;
             --fd-soft: #6f7b88;
-            --fd-accent: #2f7df6;
-            --fd-accent-hover: #4b8fff;
+            --fd-accent: #ff7f6e;
+            --fd-accent-hover: #ff9688;
+            --fd-accent-pressed: #e86452;
+            --fd-on-accent: #18181b;
+            --fd-accent-ink: var(--fd-accent);
             --fd-danger: #ff5f67;
             --fd-success: #45c779;
             --color-text: var(--fd-text);
@@ -1133,8 +1088,19 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             --fd-text: #151b23;
             --fd-muted: #5e6a78;
             --fd-soft: #82909f;
+            --fd-accent-ink: #b83e32;
             --glass-shadow: 0 16px 44px rgba(35, 53, 73, 0.12);
             --glass-shadow-soft: 0 8px 24px rgba(35, 53, 73, 0.08);
+        }
+
+        :root,
+        body[data-theme] {
+            --fd-accent-soft: color-mix(in srgb, var(--fd-accent-ink) 14%, transparent);
+            --fd-accent-soft-hover: color-mix(in srgb, var(--fd-accent-ink) 22%, transparent);
+            --fd-accent-border: var(--fd-accent-ink);
+            --fd-focus-ring: color-mix(in srgb, var(--fd-accent-ink) 24%, transparent);
+            --fd-accent-progress: color-mix(in srgb, var(--fd-accent-ink) 32%, transparent);
+            --fd-accent-selection: color-mix(in srgb, var(--fd-accent-ink) 72%, transparent);
         }
 
         html,
@@ -1157,7 +1123,7 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         .playlist-item:focus-visible,
         .playlist-name:focus-visible,
         .dir-item-name:focus-visible {
-            outline: 2px solid var(--fd-accent);
+            outline: 2px solid var(--fd-accent-ink);
             outline-offset: 2px;
         }
 
@@ -1208,13 +1174,13 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         .mobile-brand svg {
             width: 30px;
             height: 30px;
-            color: var(--fd-accent);
+            color: var(--fd-accent-ink);
             flex: 0 0 auto;
         }
 
         .sidebar-brand svg rect,
         .mobile-brand svg rect {
-            fill: rgba(47, 125, 246, 0.13);
+            fill: var(--fd-accent-soft);
             stroke: currentColor;
             stroke-width: 2;
         }
@@ -1239,10 +1205,10 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             text-align: left;
         }
 
-        #dirPicker.primary-sidebar-action {
+        .sidebar #dirPicker.primary-sidebar-action {
             background: var(--fd-accent);
-            border-color: var(--fd-accent);
-            color: #fff;
+            border-color: var(--fd-accent-border);
+            color: var(--fd-on-accent);
         }
 
         #dirPicker:hover,
@@ -1252,9 +1218,13 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             border-color: var(--fd-border-strong);
         }
 
-        #dirPicker.primary-sidebar-action:hover {
+        .sidebar #dirPicker.primary-sidebar-action:hover:not(:disabled) {
             background: var(--fd-accent-hover);
-            border-color: var(--fd-accent-hover);
+            border-color: var(--fd-accent-border);
+        }
+
+        .sidebar #dirPicker.primary-sidebar-action:active:not(:disabled) {
+            background: var(--fd-accent-pressed);
         }
 
         .dir-list {
@@ -1310,10 +1280,11 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             border-color: var(--fd-border);
         }
 
-        .playlist-item.active {
-            background: rgba(47, 125, 246, 0.16);
-            border-color: rgba(47, 125, 246, 0.55);
+        .sidebar .playlist-item.active {
+            background: var(--fd-accent-soft);
+            border-color: var(--fd-accent-border);
             color: var(--fd-text);
+            font-weight: 500;
             box-shadow: none;
         }
 
@@ -1520,15 +1491,19 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
         #emptyDirPicker {
             min-height: 42px;
             padding: 10px 18px;
-            border: 1px solid var(--fd-accent);
+            border: 1px solid var(--fd-accent-border);
             border-radius: 7px;
             background: var(--fd-accent);
-            color: #fff;
+            color: var(--fd-on-accent);
             font-size: 0.84rem;
         }
 
-        #emptyDirPicker:hover {
+        #emptyDirPicker:hover:not(:disabled) {
             background: var(--fd-accent-hover);
+        }
+
+        #emptyDirPicker:active:not(:disabled) {
+            background: var(--fd-accent-pressed);
         }
 
         .clip-dock {
@@ -1577,12 +1552,46 @@ summary: 专业的本地优先 PWA 媒体工作台，支持最大化播放区、
             color: var(--fd-text);
         }
 
-        .clip-dock-bar button#clipExportBtn,
         .clip-dock-bar button.clip-dock-btn--active,
         .clip-dock-bar button.clip-dock-btn--editing {
+            background: var(--fd-accent-soft);
+            border-color: var(--fd-accent-border);
+            color: var(--fd-text);
+        }
+
+        .clip-dock-bar button.clip-dock-btn--active:hover:not(:disabled),
+        .clip-dock-bar button.clip-dock-btn--editing:hover:not(:disabled) {
+            background: var(--fd-accent-soft-hover);
+        }
+
+        .clip-dock-bar button.clip-dock-btn--editing {
+            box-shadow: 0 0 0 3px var(--fd-focus-ring);
+        }
+
+        .clip-dock-bar button#clipExportBtn {
             background: var(--fd-accent);
-            border-color: var(--fd-accent);
-            color: #fff;
+            border-color: var(--fd-accent-border);
+            color: var(--fd-on-accent);
+        }
+
+        .clip-dock-bar button#clipExportBtn:hover:not(:disabled) {
+            background: var(--fd-accent-hover);
+        }
+
+        .clip-dock-bar button#clipExportBtn:active:not(:disabled) {
+            background: var(--fd-accent-pressed);
+        }
+
+        .clip-dock-bar button.clip-dock-btn--active:active:not(:disabled),
+        .clip-dock-bar button.clip-dock-btn--editing:active:not(:disabled) {
+            background: var(--fd-focus-ring);
+        }
+
+        .sidebar #dirPicker.primary-sidebar-action:disabled,
+        #emptyDirPicker:disabled {
+            background: var(--fd-accent);
+            opacity: 0.45;
+            cursor: not-allowed;
         }
 
         .clip-dock-duration,
