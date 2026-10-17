@@ -10,6 +10,9 @@ const names = [
   'verifyPermission', 'handlesMatch', 'renderPlaylist', 'updateControls',
   'teardownMediaElement', 'renderMediaElement', 'playMedia', 'restoreMediaArea',
   'renamePlaylistEntry', 'copyEntryToTargetDir', 'removeFromSavedDirs', 'enqueueClipJob',
+  'syncPlaylistSourceUI', 'hasReadableMediaSource', 'getEntryFile',
+  'cancelPendingPlaylistClick', 'rememberPlaylistSession', 'captureCurrentPlaybackState',
+  'restoreCurrentPlaybackState',
 ];
 const source = names.map((name) => {
   const match = html.match(new RegExp(`(?:async )?function ${name}\\([^]*?^        \\}$`, 'm'));
@@ -26,7 +29,7 @@ function deferred() {
 function fixture(count = 3) {
   const nodes = new Map();
   class Element {
-    constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.style = {}; this.attrs = {}; }
+    constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.style = {}; this.attrs = {}; this.classList = { toggle() {} }; }
     set innerHTML(value) { this.html = value; this.children = []; }
     get innerHTML() { return this.html || ''; }
     appendChild(child) { this.children.push(child); return child; }
@@ -44,7 +47,8 @@ function fixture(count = 3) {
     },
     createElement(tag) { return new Element(tag); },
     querySelector(selector) { return this.getElementById(selector); },
-    querySelectorAll() {
+    querySelectorAll(selector) {
+      if (selector !== '.source-delete') return [];
       return [this.getElementById('deleteSourceBtn'), ...this.getElementById('playlist').children.flatMap(li => li.children.filter(n => n.className === 'source-delete'))];
     },
   };
@@ -54,8 +58,14 @@ function fixture(count = 3) {
     window: { confirm(message) { calls.push(['confirm', message]); return true; } },
     URL: { createObjectURL() { calls.push(['url']); return 'blob:new'; }, revokeObjectURL(url) { revoked.push(url); } },
     playlist: [], currentIndex: 0, dirHandle: {}, sourceOperation: null,
+    activePlaylistSource: 'directory', playMode: 'single',
+    playlistSessions: {
+      directory: { entries: [], currentIndex: -1, playMode: 'single', dirHandle: null, playbackState: null },
+      drop: { entries: [], currentIndex: -1, playMode: 'list', dirHandle: null, playbackState: null },
+    },
     clipTasks: [], mediaElement: new Element('video'), activeMediaUrl: 'blob:old',
     mediaRenderRequestId: 0, mediaVisualizerCleanup: null, isPlaying: true,
+    pendingPlaybackRestore: null,
     playlistClickTimer: null, trackAudioSpectrum: false, isMuted: true,
     showToast(message, options) { toasts.push({ message, options }); },
     resetClipPoints() { c.clipResets = (c.clipResets || 0) + 1; },
@@ -66,7 +76,7 @@ function fixture(count = 3) {
     removeFromSavedDirsUnlocked() { throw new Error('Unexpected saved-dir write'); },
   });
   for (let i = 0; i < count; i++) {
-    const entry = { name: `${i}.png`, relativePath: `nested/${i}.png`, mediaKind: 'image' };
+    const entry = { sourceKind: 'directory', name: `${i}.png`, relativePath: `nested/${i}.png`, mediaKind: 'image' };
     entry.fileHandle = { kind: 'file', async getFile() { return { type: 'image/png' }; }, async isSameEntry(other) { return other === this; } };
     entry.parentDirHandle = {
       async queryPermission(opts) { calls.push(['queryPermission', opts.mode]); return 'granted'; },
